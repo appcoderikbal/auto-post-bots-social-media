@@ -1,0 +1,76 @@
+name: Amazon Affiliate Bot
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+    
+  workflow_dispatch: # Allows manual trigger for testing
+  
+  repository_dispatch:
+    types: [trigger-post-deals] # External webhook trigger
+
+permissions:
+  contents: write
+
+jobs:
+  post-deals:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Determine Actions
+        id: check_schedule
+        run: |
+          # FOR TESTING: Always enable all actions
+          echo "action_refresh=true" >> $GITHUB_OUTPUT
+          echo "action_fb=true" >> $GITHUB_OUTPUT
+          echo "action_ig=true" >> $GITHUB_OUTPUT
+          
+          echo "Automation test mode: All actions enabled."
+
+      - name: Run Scripts
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          RAPIDAPI_HOST: ${{ secrets.RAPIDAPI_HOST }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          echo "Debug: action_refresh=${{ steps.check_schedule.outputs.action_refresh }}"
+          echo "Debug: action_fb=${{ steps.check_schedule.outputs.action_fb }}"
+          echo "Debug: action_ig=${{ steps.check_schedule.outputs.action_ig }}"
+          
+          # 1. Refresh deals if needed
+          if [ "${{ steps.check_schedule.outputs.action_refresh }}" == "true" ]; then
+            echo "Running fetch_promo_deals.py..."
+            python fetch_promo_deals.py
+            echo "Running refresh_deals.py..."
+            python refresh_deals.py
+          fi
+          
+          # 3. Post to Facebook Carousel
+          if [ "${{ steps.check_schedule.outputs.action_fb }}" == "true" ]; then
+            echo "Running post_to_fb.py..."
+            python post_to_fb.py
+          fi
+
+          # 4. Post to Instagram Carousel
+          if [ "${{ steps.check_schedule.outputs.action_ig }}" == "true" ]; then
+            echo "Running post_to_ig.py..."
+            python post_to_ig.py
+          fi

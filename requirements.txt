@@ -1,0 +1,6 @@
+requests
+python-dotenv
+supabase
+yt-dlp
+google-generativeai
+playwright
