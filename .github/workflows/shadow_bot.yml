@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '*/30 * * * *' # Run every 30 minutes
   workflow_dispatch: # Allow manual trigger
+  repository_dispatch:
+    types: [trigger-shadow-bot] # External webhook trigger
 
 permissions:
   contents: write
