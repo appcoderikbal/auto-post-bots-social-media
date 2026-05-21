@@ -224,7 +224,7 @@ def get_deal_caption(deal, platform="fb"):
     # Social Media Links
     fb_link = "https://facebook.com/snagpopofficial"
     ig_link = "https://instagram.com/snagpopofficial"
-    yt_link = "https://youtube.com/@snagpop"
+    yt_link = "https://youtube.com/@snagpopofficial"
     
     social_footer = (
         f"🔗 JOIN US FOR MORE:\n"
@@ -240,14 +240,14 @@ def get_deal_caption(deal, platform="fb"):
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
                    f"🔗 CLICK THE LINK IN BIO TO BUY! 🔗\n\n"
-                   f"🔔 Follow @SnagPop for daily glitch deals!\n\n"
+                   f"🔔 Follow @SnagPopOfficial for daily glitch deals!\n\n"
                    f"{seo_tags}")
     else:
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
                    f"🛒 GRAB IT HERE: {tracker_url}\n\n"
                    f"{social_footer}\n"
-                   f"🔔 Follow @SnagPop for daily glitch deals!\n\n"
+                   f"🔔 Follow @SnagPopOfficial for daily glitch deals!\n\n"
                    f"{seo_tags}")
     
     return caption
