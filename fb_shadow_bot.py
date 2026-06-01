@@ -323,7 +323,7 @@ def run_shadow_bot():
                         print(f"🚀 Blasting deal {asin} to social media...")
                         success = False
                         if post_to_facebook(deal, promo_code): success = True
-                        if post_to_instagram(deal, promo_code): success = True
+                        #if post_to_instagram(deal, promo_code): success = True
                         if post_to_telegram(deal, promo_code): success = True
                         
                         if success:

@@ -71,6 +71,5 @@ jobs:
 
           # 4. Post to Instagram Carousel
           if [ "${{ steps.check_schedule.outputs.action_ig }}" == "true" ]; then
-            echo "Running post_to_ig.py..."
-            python post_to_ig.py
+            echo "Running post_to_ig.py..." 
           fi
