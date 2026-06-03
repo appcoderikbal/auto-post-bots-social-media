@@ -252,7 +252,7 @@ def get_deal_caption(deal, platform="fb"):
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
                    f"🛒 GRAB IT HERE: {tracker_url}\n\n"
-                   f"{social_footer}\n"
+                   #f"{social_footer}\n"
                    f"🔔 Follow @SnagPopOfficial for daily glitch deals!\n\n"
                    f"{seo_tags}")
     
