@@ -210,7 +210,9 @@ def get_deal_caption(deal, platform="fb"):
         "#lifestylehacks", "#techdeals", "#homedecorideas", "#giftideas2026",
         "#amazonmusthaves", "#viralfinds", "#dealsonline", "#budgetfriendly",
         "#smartshopper", "#neverpayfullprice", "#hotdeals", "#dailydeals",
-        "#shoppingaddict", "#instadeals", "#savebig"
+        "#shoppingaddict", "#instadeals", "#savebig",
+        "#tiktokmademebuythis", "#amazonmademebuythis", "#viralus", "#usdeals",
+        "#viralusa", "#usa"
     ]
     random.shuffle(seo_tags_list)
     seo_tags = " ".join(seo_tags_list[:5])
