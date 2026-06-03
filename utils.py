@@ -193,7 +193,7 @@ def get_deal_caption(deal, platform="fb"):
     ig_promo = "https://www.instagram.com/snagpopofficial"
     
     if platform == "ig":
-        cta = "🔗 Click the Link in Bio to Buy!\n\n"
+        cta = "link in bio -> all deals\n\n"
         url_text = ""
     elif platform == "tg":
         # Keep TG logic just in case, but it won't be called if removed from post_deals
@@ -237,9 +237,10 @@ def get_deal_caption(deal, platform="fb"):
     main_body = "".join(content_blocks)
 
     if platform == "ig":
-        caption = (f"{random.choice(final_hooks)}\n\n"
+        caption = (f"link in bio -> all deals\n\n"
+                   f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"🔗 CLICK THE LINK IN BIO TO BUY! 🔗\n\n"
+                   f"link in bio -> all deals\n\n"
                    f"🔔 Follow @SnagPopOfficial for daily glitch deals!\n\n"
                    f"{seo_tags}")
     else:

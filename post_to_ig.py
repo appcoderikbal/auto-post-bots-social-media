@@ -115,7 +115,7 @@ def post_instagram_carousel(deal):
                 comment_res = requests.post(
                     f"https://graph.facebook.com/v19.0/{ig_media_id}/comments",
                     data={
-                        'message': "🔗 Click the Link in Bio to shop! 🔗",
+                        'message': "link in bio -> all deals",
                         'access_token': FB_PAGE_ACCESS_TOKEN
                     }
                 ).json()
