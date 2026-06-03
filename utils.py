@@ -203,14 +203,17 @@ def get_deal_caption(deal, platform="fb"):
         cta = f"🛒 Grab it here: {tracker_url}\n\n"
         url_text = ""
 
-    # 4. Randomized SEO Tags (4-6)
+    # 4. Randomized SEO Tags (Exactly 5)
     seo_tags_list = [
         "#amazonfinds", "#amazondeals", "#bestamazonproducts", "#amazoninfluencer", 
         "#tiktokmademebuyit", "#shoppinghaul", "#discountdeals", "#smartshopping",
-        "#lifestylehacks", "#techdeals", "#homedecorideas", "#giftideas2026"
+        "#lifestylehacks", "#techdeals", "#homedecorideas", "#giftideas2026",
+        "#amazonmusthaves", "#viralfinds", "#dealsonline", "#budgetfriendly",
+        "#smartshopper", "#neverpayfullprice", "#hotdeals", "#dailydeals",
+        "#shoppingaddict", "#instadeals", "#savebig"
     ]
     random.shuffle(seo_tags_list)
-    seo_tags = " ".join(seo_tags_list[:random.randint(4, 6)])
+    seo_tags = " ".join(seo_tags_list[:5])
 
     # 5. Dynamic Content Shuffling
     content_blocks = [
