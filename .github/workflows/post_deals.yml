@@ -1,10 +1,7 @@
 name: Amazon Affiliate Bot
 
 on:
-  schedule:
-    - cron: '0 */3 * * *' # Every 3 hours (conserve free RapidAPI quota)
-    
-  workflow_dispatch: # Allows manual trigger for testing
+  workflow_dispatch: # Manual trigger only (run from the Actions tab)
   
   repository_dispatch:
     types: [trigger-post-deals] # External webhook trigger
