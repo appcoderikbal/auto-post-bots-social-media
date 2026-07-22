@@ -24,6 +24,7 @@ candidate paths in _map_item / search_deals if needed.
 
 import os
 import time
+import urllib.parse
 import requests
 from dotenv import load_dotenv
 
@@ -39,6 +40,13 @@ MARKETPLACE = os.getenv("AMAZON_MARKETPLACE", "www.amazon.com")
 TOKEN_URL = os.getenv("AMAZON_TOKEN_URL", "https://api.amazon.com/auth/o2/token")
 API_BASE = os.getenv("AMAZON_CREATORS_API_BASE", "https://creatorsapi.amazon")
 SCOPE = os.getenv("AMAZON_CREATORS_SCOPE", "creatorsapi::default")
+
+# --- Temporary RapidAPI scraper fallback -------------------------------------
+# Used only when the Creators API is unavailable (e.g. account not yet eligible
+# for the Creators API). Remove once the Creators API is fully enabled.
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "amazon-data-scraper-api3.p.rapidapi.com")
+FALLBACK_ENABLED = os.getenv("AMAZON_FALLBACK_ENABLED", "true").lower() == "true"
 
 # Resources requested from the API (analogous to PA-API resources).
 RESOURCES = [
@@ -193,7 +201,12 @@ def get_items(asins):
     }
     data = _post("/catalog/v1/getItems", body)
     items = _dig(data, "itemResults", "items") or []
-    return [_map_item(i) for i in items]
+    if items:
+        return [_map_item(i) for i in items]
+    # Creators API returned nothing (e.g. account not eligible) -> fall back.
+    if FALLBACK_ENABLED:
+        return [d for d in (_rapidapi_get_item(a) for a in asins) if d]
+    return []
 
 
 def get_item(asin):
@@ -223,4 +236,89 @@ def search_deals(keywords, search_index="All", min_saving_percent=None, item_cou
         or _dig(data, "itemResults", "items")
         or []
     )
-    return [_map_item(i) for i in items]
+    if items:
+        return [_map_item(i) for i in items]
+    # Creators API returned nothing (e.g. account not eligible) -> fall back.
+    if FALLBACK_ENABLED:
+        return _rapidapi_search(keywords, item_count=item_count)
+    return []
+
+
+# --- RapidAPI scraper fallback implementation --------------------------------
+
+def _rapidapi_post(payload):
+    if not RAPIDAPI_KEY:
+        print("⚠️ RapidAPI fallback unavailable (RAPIDAPI_KEY not set).")
+        return None
+    url = f"https://{RAPIDAPI_HOST}/queries"
+    headers = {
+        "content-type": "application/json",
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": RAPIDAPI_HOST,
+    }
+    try:
+        return requests.post(url, json=payload, headers=headers, timeout=20).json()
+    except Exception as e:
+        print(f"❌ RapidAPI fallback request failed: {e}")
+        return None
+
+
+def _tagged_url(base_url):
+    if not base_url:
+        return None
+    sep = "&" if urllib.parse.urlparse(base_url).query else "?"
+    return f"{base_url}{sep}tag={PARTNER_TAG}"
+
+
+def _rapidapi_get_item(asin):
+    print(f"⤵️ Falling back to RapidAPI scraper for ASIN {asin}...")
+    res = _rapidapi_post({"source": "amazon_product", "query": asin, "geo_location": "90210", "parse": True})
+    content = _dig(res, "results", 0, "content")
+    if not content:
+        return None
+    pct = content.get("discount_percentage")
+    images = content.get("images", []) or []
+    return {
+        "asin": asin,
+        "title": content.get("title", "Amazing Amazon Find!"),
+        "price": f"${content.get('price')}" if content.get("price") else "Check price",
+        "old_price": None,
+        "discount": f"{pct}%" if pct else None,
+        "discount_text": f" ({pct}% OFF!)" if pct else "",
+        "affiliate_url": _tagged_url(content.get("url", "")),
+        "image_url": images[0] if images else None,
+        "image_list": images[:5],
+        "rating": content.get("rating"),
+        "reviews_count": content.get("reviews_count"),
+    }
+
+
+def _rapidapi_search(keywords, item_count=10):
+    print(f"⤵️ Falling back to RapidAPI scraper for search '{keywords}'...")
+    res = _rapidapi_post({"source": "amazon_search", "query": keywords, "geo_location": "90210", "parse": True})
+    content = _dig(res, "results", 0, "content") or {}
+    organic = _dig(content, "results", "organic") or content.get("organic") or []
+    deals = []
+    for item in organic[:item_count]:
+        asin = item.get("asin")
+        if not asin:
+            continue
+        price = item.get("price", 0)
+        old_price = item.get("price_strikethrough", 0)
+        discount = None
+        if old_price and price and old_price > price:
+            discount = f"{round((old_price - price) / old_price * 100)}%"
+        deals.append({
+            "asin": asin,
+            "title": item.get("title", "Amazing Amazon Find!"),
+            "price": f"${price}" if price else "Check price",
+            "old_price": f"${old_price}" if old_price else None,
+            "discount": discount,
+            "discount_text": f" ({discount} OFF!)" if discount else "",
+            "affiliate_url": _tagged_url(f"https://www.amazon.com{item.get('url', '')}"),
+            "image_url": item.get("url_image"),
+            "image_list": [item.get("url_image")] if item.get("url_image") else [],
+            "rating": item.get("rating"),
+            "reviews_count": item.get("reviews_count"),
+        })
+    return deals

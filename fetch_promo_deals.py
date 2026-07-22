@@ -9,7 +9,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 
 def fetch_promo_deals():
-    print("🔄 Fetching fresh deals via Amazon PA-API...")
+    print("🔄 Fetching fresh deals via Amazon Creators API...")
 
     # Keywords likely to surface discounted items; PA-API filters by min saving.
     query = random.choice(["deals", "today's deals", "best sellers", "top rated"])
