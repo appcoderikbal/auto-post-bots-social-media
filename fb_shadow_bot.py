@@ -341,7 +341,7 @@ def run_shadow_bot():
                                         "status": "posted",
                                         "title": deal.get("title"),
                                         "price": deal.get("price"),
-                                        "image_url": deal.get("image_list")[0] if deal.get("image_list") else None,
+                                        # NOTE: media (image URLs) intentionally NOT stored in Supabase
                                         "affiliate_url": target_link,
                                         "rating": deal.get("rating"),
                                         "reviews_count": deal.get("reviews_count"),

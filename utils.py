@@ -33,7 +33,7 @@ def mark_posted(asin, platform, product_data=None):
             "price": product_data.get("price"),
             "old_price": product_data.get("old_price"),
             "discount": product_data.get("discount"),
-            "image_url": product_data.get("image_list")[0] if product_data.get("image_list") else None,
+            # NOTE: media (image URLs) intentionally NOT stored in Supabase
             "affiliate_url": product_data.get("affiliate_url"),
             "rating": product_data.get("rating"),
             "reviews_count": product_data.get("reviews_count")
@@ -61,7 +61,7 @@ def add_to_queue(asin, platform, category=None, product_data=None):
                 "price": product_data.get("price"),
                 "old_price": product_data.get("old_price"),
                 "discount": product_data.get("discount"),
-                "image_url": product_data.get("image_url") if product_data.get("image_url") else (product_data.get("image_list")[0] if product_data.get("image_list") else None),
+                # NOTE: media (image URLs) intentionally NOT stored in Supabase
                 "affiliate_url": product_data.get("affiliate_url"),
                 "rating": product_data.get("rating"),
                 "reviews_count": product_data.get("reviews_count"),
@@ -93,11 +93,11 @@ def get_deal_caption(deal, platform="fb"):
     categories = {
         "promo": [
             f"🚨 PROMO CODE ALERT! Use code: {deal.get('promo_code')} 🚨",
-            f"💰 MONEY GLITCH? Enter {deal.get('promo_code')} at checkout!",
-            f"🔥 MISTAKE PRICE! Apply code {deal.get('promo_code')} to save BIG!",
-            f"⚡ QUICK! Code {deal.get('promo_code')} expires SOON!",
-            f"🎁 FREEBIE VIBES! Code {deal.get('promo_code')} drops the price!",
-            f"😱 Amazon is practically giving this away with code: {deal.get('promo_code')}",
+            f"💰 Extra savings! Enter {deal.get('promo_code')} at checkout!",
+            f"🔥 Big markdown! Apply code {deal.get('promo_code')} to save more!",
+            f"⚡ Limited-time code {deal.get('promo_code')} — while it lasts!",
+            f"🎁 Bonus savings! Code {deal.get('promo_code')} lowers the price!",
+            f"😱 Great value with code: {deal.get('promo_code')}",
             f"🎫 UNLOCK SAVINGS: Use code {deal.get('promo_code')} now!",
             f"💸 Your bank account will thank you. Code: {deal.get('promo_code')}"
         ],
@@ -117,8 +117,8 @@ def get_deal_caption(deal, platform="fb"):
             "Your home called. It wants this. 🏠",
             "The ultimate life hack for your kitchen. 🍳",
             "Cleaning just got a lot more satisfying. ✨",
-            "Restock your home for under $25! 📦",
-            "Interior designers don't want you to know about this. 🤫",
+            "Restock your home essentials! 📦",
+            "An interior-designer favorite. 🤫",
             "Turn your house into a luxury oasis. 🌿",
             "The one thing your guest room is missing. 🛏️",
             "Dinner time just got 10x easier. 🥘",
@@ -139,11 +139,11 @@ def get_deal_caption(deal, platform="fb"):
         ],
         "savings": [
             "I'm actually screaming at this price drop. 😱",
-            "Stop overpaying! Duck the price now. 🦆",
-            "This deal is literally illegal... 🤫",
+            "Stop overpaying! Check the price now. 🦆",
+            "This deal is seriously good... 🤫",
             "My jaw dropped when I saw the discount. 📉",
-            "Is this a pricing error? Grab it FAST! 🏃‍♂️",
-            "Better than Black Friday deals. Seriously. 🗓️",
+            "Such a good price — grab it while it lasts! 🏃‍♂️",
+            "A great time to buy. Seriously. 🗓️",
             "Your wallet's new best friend. 💰",
             "Save more than you spend. That's the goal. ✅",
             "Lowest price in 30 days! Don't miss out. ⏰",
@@ -241,19 +241,26 @@ def get_deal_caption(deal, platform="fb"):
     random.shuffle(content_blocks)
     main_body = "".join(content_blocks)
 
+    # Required Amazon Associates disclosure
+    disclosure = "As an Amazon Associate we earn from qualifying purchases."
+
     if platform == "ig":
-        caption = (f"link in bio -> all deals\n\n"
+        # IG can't use clickable links, so drive engagement: users comment "LINK" to get the deal
+        caption = (f"💬 Want it? Comment \"LINK\" below and we'll send you the deal! 👇\n\n"
                    f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"link in bio -> all deals\n\n"
-                   f"🔔 Follow @SnagPopOfficial for daily glitch deals!\n\n"
+                   f"💬 Just comment \"LINK\" and we'll DM you the deal link!\n\n"
+                   f"🔔 Follow @SnagPopOfficial for daily deals!\n\n"
+                   f"{disclosure}\n\n"
                    f"{seo_tags}")
     else:
+        # FB keeps the real link and also points to the link in the comments
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
                    f"🛒 GRAB IT HERE: {tracker_url}\n\n"
-                   #f"{social_footer}\n"
-                   f"🔔 Follow @SnagPopOfficial for daily glitch deals!\n\n"
+                   f"👇 LINK in the comments too!\n\n"
+                   f"🔔 Follow @SnagPopOfficial for daily deals!\n\n"
+                   f"{disclosure}\n\n"
                    f"{seo_tags}")
-    
+
     return caption
