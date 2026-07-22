@@ -6,6 +6,7 @@ import requests
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 from utils import get_deal_caption, supabase
+from amazon_client import get_item
 
 import sys
 load_dotenv()
@@ -22,8 +23,6 @@ FB_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN")
 IG_USER_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
 TG_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "amazon-data-scraper-api3.p.rapidapi.com")
 
 def resolve_asin(url):
     """Follows redirects to find the final Amazon ASIN"""
@@ -50,27 +49,8 @@ def resolve_asin(url):
     return None
 
 def get_product_details(asin):
-    """Fetches high-quality data for the ASIN from Amazon API"""
-    print(f"🔍 Fetching official data for ASIN: {asin}")
-    url = f"https://{RAPIDAPI_HOST}/queries"
-    payload = {"source": "amazon_product", "query": asin, "geo_location": "90210", "parse": True}
-    headers = {"content-type": "application/json", "X-RapidAPI-Key": RAPIDAPI_KEY, "X-RapidAPI-Host": RAPIDAPI_HOST}
-    try:
-        response = requests.post(url, json=payload, headers=headers).json()
-        content = response.get("results", [])[0].get("content", {})
-        if not content: return None
-        return {
-            "asin": asin,
-            "title": content.get("title"),
-            "price": f"${content.get('price')}" if content.get('price') else "Check price",
-            "discount_text": f" ({content.get('discount_percentage')}% OFF!)" if content.get('discount_percentage') else "",
-            "image_list": content.get("images", [])[:5],
-            "rating": content.get("rating"),
-            "reviews_count": content.get("reviews_count")
-        }
-    except Exception as e:
-        print(f"❌ API Error: {e}")
-        return None
+    """Fetches official product data for the ASIN from the Amazon Creators API."""
+    return get_item(asin)
 
 def post_to_facebook(deal, promo_code):
     print("📤 Posting to Facebook...")
