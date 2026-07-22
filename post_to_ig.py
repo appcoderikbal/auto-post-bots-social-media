@@ -1,4 +1,5 @@
 import requests
+import re
 import json
 import sys
 import os
@@ -17,6 +18,38 @@ FB_PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN") # Uses the same token
 # Facebook Place ID for location tagging (default: New York, United States)
 FB_LOCATION_ID = os.getenv("FB_LOCATION_ID", "110843418940484")
 
+
+def _ig_image(url):
+    """Normalize an Amazon image URL to the full-size original.
+
+    IG's media fetcher intermittently fails on Amazon's sized variants
+    (e.g. '..._AC_SL1500_.jpg'). Stripping the size modifier yields the
+    canonical image, which IG fetches reliably.
+    """
+    if not url:
+        return url
+    return re.sub(r'\._[^./]+_\.(jpg|jpeg|png)', r'.\1', url, flags=re.IGNORECASE)
+
+
+def _create_ig_container(img_url):
+    """Create one IG carousel item container, with a single retry. Returns id or None."""
+    for attempt in range(2):
+        res = requests.post(
+            f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media",
+            data={
+                'image_url': img_url,
+                'is_carousel_item': 'true',
+                'access_token': FB_PAGE_ACCESS_TOKEN
+            }
+        ).json()
+        if 'id' in res:
+            return res['id']
+        print(f"❌ Error creating IG item container (attempt {attempt + 1}): {res}")
+        if attempt == 0:
+            time.sleep(3)  # transient fetch failures often clear on retry
+    return None
+
+
 def post_instagram_carousel(deal):
     print(f"📤 Posting Carousel to Instagram: {deal['title'][:50]}...")
     caption = get_deal_caption(deal, platform="ig")
@@ -26,23 +59,17 @@ def post_instagram_carousel(deal):
             print("❌ Instagram Account ID missing in .env")
             return False
 
-        # Step 1: Create Item Containers for each image
+        # Step 1: Create Item Containers for each image (full-size URL + retry)
         container_ids = []
         for img_url in deal['image_list']:
-            res = requests.post(
-                f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media",
-                data={
-                    'image_url': img_url,
-                    'is_carousel_item': 'true',
-                    'access_token': FB_PAGE_ACCESS_TOKEN
-                }
-            ).json()
-            if 'id' in res:
-                container_ids.append(res['id'])
-            else:
-                print(f"❌ Error creating IG item container: {res}")
-        
-        if not container_ids: return False
+            cid = _create_ig_container(_ig_image(img_url))
+            if cid:
+                container_ids.append(cid)
+
+        # IG carousels require 2-10 items.
+        if len(container_ids) < 2:
+            print(f"❌ Not enough valid images for an IG carousel ({len(container_ids)}). Skipping.")
+            return False
 
         # Step 2: Create Carousel Container
         res = requests.post(

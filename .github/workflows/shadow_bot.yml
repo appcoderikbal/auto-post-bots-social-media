@@ -2,7 +2,7 @@ name: Ella Shadow Bot Automation
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # Run every 30 minutes
+    - cron: '30 */3 * * *' # Every 3 hours (offset; conserve free RapidAPI quota)
   workflow_dispatch: # Allow manual trigger
   repository_dispatch:
     types: [trigger-shadow-bot] # External webhook trigger
