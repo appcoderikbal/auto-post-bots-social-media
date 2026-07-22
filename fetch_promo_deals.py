@@ -16,7 +16,7 @@ def fetch_promo_deals():
     deals = search_deals(query, search_index="All", min_saving_percent=20, item_count=10)
 
     if not deals:
-        print("No results from PA-API.")
+        print("No results from Amazon (Creators API + fallback).")
         return
 
     print(f"✨ Found {len(deals)} potential deals.")

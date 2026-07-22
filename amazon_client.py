@@ -257,7 +257,11 @@ def _rapidapi_post(payload):
         "X-RapidAPI-Host": RAPIDAPI_HOST,
     }
     try:
-        return requests.post(url, json=payload, headers=headers, timeout=20).json()
+        resp = requests.post(url, json=payload, headers=headers, timeout=20)
+        if resp.status_code != 200:
+            print(f"❌ RapidAPI fallback HTTP {resp.status_code}: {resp.text[:300]}")
+            return None
+        return resp.json()
     except Exception as e:
         print(f"❌ RapidAPI fallback request failed: {e}")
         return None
@@ -275,6 +279,8 @@ def _rapidapi_get_item(asin):
     res = _rapidapi_post({"source": "amazon_product", "query": asin, "geo_location": "90210", "parse": True})
     content = _dig(res, "results", 0, "content")
     if not content:
+        if res is not None:
+            print(f"⚠️ RapidAPI product response had no content. Top-level keys: {list(res.keys()) if isinstance(res, dict) else type(res).__name__}")
         return None
     pct = content.get("discount_percentage")
     images = content.get("images", []) or []
@@ -298,6 +304,11 @@ def _rapidapi_search(keywords, item_count=10):
     res = _rapidapi_post({"source": "amazon_search", "query": keywords, "geo_location": "90210", "parse": True})
     content = _dig(res, "results", 0, "content") or {}
     organic = _dig(content, "results", "organic") or content.get("organic") or []
+    if not organic:
+        if res is not None:
+            print(f"⚠️ RapidAPI search returned no organic results. "
+                  f"Response keys: {list(res.keys()) if isinstance(res, dict) else type(res).__name__}; "
+                  f"content keys: {list(content.keys()) if isinstance(content, dict) else type(content).__name__}")
     deals = []
     for item in organic[:item_count]:
         asin = item.get("asin")
