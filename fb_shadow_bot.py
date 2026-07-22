@@ -321,10 +321,8 @@ def run_shadow_bot():
                                         "status": "posted",
                                         "title": deal.get("title"),
                                         "price": deal.get("price"),
-                                        # NOTE: media (image URLs) intentionally NOT stored in Supabase
+                                        # NOTE: media (image URLs) and ratings intentionally NOT stored in Supabase
                                         "affiliate_url": target_link,
-                                        "rating": deal.get("rating"),
-                                        "reviews_count": deal.get("reviews_count"),
                                         "promo_code": promo_code
                                     }).execute()
                                     print("💾 Saved shadow-posted deal details to Supabase.")

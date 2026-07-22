@@ -33,10 +33,8 @@ def mark_posted(asin, platform, product_data=None):
             "price": product_data.get("price"),
             "old_price": product_data.get("old_price"),
             "discount": product_data.get("discount"),
-            # NOTE: media (image URLs) intentionally NOT stored in Supabase
+            # NOTE: media (image URLs) and ratings intentionally NOT stored in Supabase
             "affiliate_url": product_data.get("affiliate_url"),
-            "rating": product_data.get("rating"),
-            "reviews_count": product_data.get("reviews_count")
         })
     supabase.table("deals_queue").update(data).eq("asin", asin).eq("platform", platform).execute()
 
@@ -61,10 +59,8 @@ def add_to_queue(asin, platform, category=None, product_data=None):
                 "price": product_data.get("price"),
                 "old_price": product_data.get("old_price"),
                 "discount": product_data.get("discount"),
-                # NOTE: media (image URLs) intentionally NOT stored in Supabase
+                # NOTE: media (image URLs) and ratings intentionally NOT stored in Supabase
                 "affiliate_url": product_data.get("affiliate_url"),
-                "rating": product_data.get("rating"),
-                "reviews_count": product_data.get("reviews_count"),
                 "promo_code": product_data.get("promo_code")
             })
         supabase.table("deals_queue").upsert(data).execute()
@@ -182,8 +178,7 @@ def get_deal_caption(deal, platform="fb"):
     
     # 2. Emojis & Parts
     ep = {"box": "📦", "money": "💰", "cart": "🛒", "tag": "🏷️", "star": "🌟", "fire": "🔥", "check": "✅"}
-    rating = f"{ep['star']} Rating: {deal['rating']} {'⭐' * int(float(deal['rating']))} ({deal['reviews_count']} reviews)\n\n" if deal.get('rating') else ""
-    
+
     # 3. Call to Action logic
     website_url = "https://www.snagpop.com"
     tracker_url = f"{website_url}/l/{deal['asin']}?s={platform}"
@@ -205,7 +200,7 @@ def get_deal_caption(deal, platform="fb"):
 
     # 4. Randomized SEO Tags (Exactly 5)
     seo_tags_list = [
-        "#amazonfinds", "#amazondeals", "#bestamazonproducts", "#amazoninfluencer", 
+        "#amazonfinds", "#amazondeals", "#bestamazonproducts", "#amazoninfluencer",
         "#tiktokmademebuyit", "#shoppinghaul", "#discountdeals", "#smartshopping",
         "#lifestylehacks", "#techdeals", "#homedecorideas", "#giftideas2026",
         "#amazonmusthaves", "#viralfinds", "#dealsonline", "#budgetfriendly",
@@ -220,8 +215,6 @@ def get_deal_caption(deal, platform="fb"):
     # 5. Dynamic Content Shuffling
     content_blocks = [
         f"{ep['box']} {deal['title']}\n\n",
-        f"{rating}",
-        f"{ep['money']} Price: {deal['price']}{deal['discount_text']}\n\n"
     ]
     if deal.get('promo_code'):
         content_blocks.append(f"🎫 PROMO CODE: {deal['promo_code']} (Apply at checkout)\n\n")
