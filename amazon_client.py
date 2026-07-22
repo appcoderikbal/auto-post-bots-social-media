@@ -23,6 +23,7 @@ candidate paths in _map_item / search_deals if needed.
 """
 
 import os
+import re
 import time
 import urllib.parse
 import requests
@@ -41,11 +42,13 @@ TOKEN_URL = os.getenv("AMAZON_TOKEN_URL", "https://api.amazon.com/auth/o2/token"
 API_BASE = os.getenv("AMAZON_CREATORS_API_BASE", "https://creatorsapi.amazon")
 SCOPE = os.getenv("AMAZON_CREATORS_SCOPE", "creatorsapi::default")
 
-# --- Temporary RapidAPI scraper fallback -------------------------------------
-# Used only when the Creators API is unavailable (e.g. account not yet eligible
-# for the Creators API). Remove once the Creators API is fully enabled.
+# --- Fallback: Real-Time Amazon Data (RapidAPI) ------------------------------
+# Used only when the Creators API is unavailable (e.g. account not yet eligible).
+# Free tier on RapidAPI; reuses your existing RAPIDAPI_KEY (subscribe to the
+# "Real-Time Amazon Data" API in your RapidAPI account first).
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "amazon-data-scraper-api3.p.rapidapi.com")
+REALTIME_AMAZON_HOST = os.getenv("REALTIME_AMAZON_HOST", "real-time-amazon-data.p.rapidapi.com")
+MARKETPLACE_COUNTRY = os.getenv("AMAZON_MARKETPLACE_COUNTRY", "US")
 FALLBACK_ENABLED = os.getenv("AMAZON_FALLBACK_ENABLED", "true").lower() == "true"
 
 # Resources requested from the API (analogous to PA-API resources).
@@ -244,26 +247,33 @@ def search_deals(keywords, search_index="All", min_saving_percent=None, item_cou
     return []
 
 
-# --- RapidAPI scraper fallback implementation --------------------------------
+# --- Real-Time Amazon Data (RapidAPI) fallback implementation ----------------
 
-def _rapidapi_post(payload):
+def _rtad_get(path, params):
+    """GET a Real-Time Amazon Data endpoint; return parsed JSON or None."""
     if not RAPIDAPI_KEY:
-        print("⚠️ RapidAPI fallback unavailable (RAPIDAPI_KEY not set).")
+        print("⚠️ Fallback unavailable (RAPIDAPI_KEY not set).")
         return None
-    url = f"https://{RAPIDAPI_HOST}/queries"
-    headers = {
-        "content-type": "application/json",
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": RAPIDAPI_HOST,
-    }
+    url = f"https://{REALTIME_AMAZON_HOST}{path}"
+    headers = {"X-RapidAPI-Key": RAPIDAPI_KEY, "X-RapidAPI-Host": REALTIME_AMAZON_HOST}
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=20)
+        resp = requests.get(url, params=params, headers=headers, timeout=20)
         if resp.status_code != 200:
-            print(f"❌ RapidAPI fallback HTTP {resp.status_code}: {resp.text[:300]}")
+            print(f"❌ Real-Time Amazon Data HTTP {resp.status_code}: {resp.text[:300]}")
             return None
         return resp.json()
     except Exception as e:
-        print(f"❌ RapidAPI fallback request failed: {e}")
+        print(f"❌ Real-Time Amazon Data request failed: {e}")
+        return None
+
+
+def _parse_price(value):
+    """Parse a price string like '$1,299.99' into a float, or None."""
+    if value in (None, ""):
+        return None
+    try:
+        return float(re.sub(r"[^0-9.]", "", str(value)))
+    except ValueError:
         return None
 
 
@@ -274,62 +284,44 @@ def _tagged_url(base_url):
     return f"{base_url}{sep}tag={PARTNER_TAG}"
 
 
-def _rapidapi_get_item(asin):
-    print(f"⤵️ Falling back to RapidAPI scraper for ASIN {asin}...")
-    res = _rapidapi_post({"source": "amazon_product", "query": asin, "geo_location": "90210", "parse": True})
-    content = _dig(res, "results", 0, "content")
-    if not content:
-        if res is not None:
-            print(f"⚠️ RapidAPI product response had no content. Top-level keys: {list(res.keys()) if isinstance(res, dict) else type(res).__name__}")
-        return None
-    pct = content.get("discount_percentage")
-    images = content.get("images", []) or []
+def _map_rtad(p):
+    """Map a Real-Time Amazon Data product dict to the project's standard dict."""
+    price_disp = p.get("product_price")
+    old_disp = p.get("product_original_price")
+    cur, old = _parse_price(price_disp), _parse_price(old_disp)
+    pct = round((old - cur) / old * 100) if (old and cur and old > cur) else None
+    photos = p.get("product_photos") or ([p.get("product_photo")] if p.get("product_photo") else [])
     return {
-        "asin": asin,
-        "title": content.get("title", "Amazing Amazon Find!"),
-        "price": f"${content.get('price')}" if content.get("price") else "Check price",
-        "old_price": None,
+        "asin": p.get("asin"),
+        "title": p.get("product_title", "Amazing Amazon Find!"),
+        "price": price_disp or "Check price",
+        "old_price": old_disp,
         "discount": f"{pct}%" if pct else None,
         "discount_text": f" ({pct}% OFF!)" if pct else "",
-        "affiliate_url": _tagged_url(content.get("url", "")),
-        "image_url": images[0] if images else None,
-        "image_list": images[:5],
-        "rating": content.get("rating"),
-        "reviews_count": content.get("reviews_count"),
+        "affiliate_url": _tagged_url(p.get("product_url")),
+        "image_url": photos[0] if photos else None,
+        "image_list": [ph for ph in photos if ph][:5],
+        "rating": p.get("product_star_rating"),
+        "reviews_count": p.get("product_num_ratings"),
     }
 
 
+def _rapidapi_get_item(asin):
+    print(f"⤵️ Fetching ASIN {asin} via Real-Time Amazon Data...")
+    data = _rtad_get("/product-details", {"asin": asin, "country": MARKETPLACE_COUNTRY})
+    product = _dig(data, "data")
+    if not product:
+        if data is not None:
+            print(f"⚠️ No product data for {asin}. Keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")
+        return None
+    return _map_rtad(product)
+
+
 def _rapidapi_search(keywords, item_count=10):
-    print(f"⤵️ Falling back to RapidAPI scraper for search '{keywords}'...")
-    res = _rapidapi_post({"source": "amazon_search", "query": keywords, "geo_location": "90210", "parse": True})
-    content = _dig(res, "results", 0, "content") or {}
-    organic = _dig(content, "results", "organic") or content.get("organic") or []
-    if not organic:
-        if res is not None:
-            print(f"⚠️ RapidAPI search returned no organic results. "
-                  f"Response keys: {list(res.keys()) if isinstance(res, dict) else type(res).__name__}; "
-                  f"content keys: {list(content.keys()) if isinstance(content, dict) else type(content).__name__}")
-    deals = []
-    for item in organic[:item_count]:
-        asin = item.get("asin")
-        if not asin:
-            continue
-        price = item.get("price", 0)
-        old_price = item.get("price_strikethrough", 0)
-        discount = None
-        if old_price and price and old_price > price:
-            discount = f"{round((old_price - price) / old_price * 100)}%"
-        deals.append({
-            "asin": asin,
-            "title": item.get("title", "Amazing Amazon Find!"),
-            "price": f"${price}" if price else "Check price",
-            "old_price": f"${old_price}" if old_price else None,
-            "discount": discount,
-            "discount_text": f" ({discount} OFF!)" if discount else "",
-            "affiliate_url": _tagged_url(f"https://www.amazon.com{item.get('url', '')}"),
-            "image_url": item.get("url_image"),
-            "image_list": [item.get("url_image")] if item.get("url_image") else [],
-            "rating": item.get("rating"),
-            "reviews_count": item.get("reviews_count"),
-        })
-    return deals
+    print(f"⤵️ Searching '{keywords}' via Real-Time Amazon Data...")
+    data = _rtad_get("/search", {"query": keywords, "country": MARKETPLACE_COUNTRY, "page": "1"})
+    products = _dig(data, "data", "products") or []
+    if not products and data is not None:
+        print(f"⚠️ Real-Time Amazon Data returned no products. "
+              f"Keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")
+    return [_map_rtad(p) for p in products[:item_count] if p.get("asin")]
