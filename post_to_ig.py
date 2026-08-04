@@ -104,23 +104,6 @@ def post_instagram_carousel(deal):
         if 'id' in result:
             ig_media_id = result['id']
             print(f"✅ Posted Carousel to Instagram! ID: {ig_media_id}")
-            
-            # Add comment (No direct links for IG)
-            try:
-                comment_res = requests.post(
-                    f"https://graph.facebook.com/v19.0/{ig_media_id}/comments",
-                    data={
-                        'message': "link in bio -> all deals",
-                        'access_token': FB_PAGE_ACCESS_TOKEN
-                    }
-                ).json()
-                if 'id' in comment_res:
-                    print(f"💬 Added comment to Instagram! ID: {comment_res['id']}")
-                else:
-                    print(f"⚠️ Failed to add IG comment: {comment_res}")
-            except Exception as e:
-                print(f"⚠️ Error adding IG comment: {e}")
-                
             return True
         else:
             print(f"❌ Error publishing to IG: {result}")
