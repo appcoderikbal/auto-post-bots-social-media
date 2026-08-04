@@ -33,13 +33,12 @@ def post_carousel(deal):
             print(f"✅ Posted Carousel to Facebook! ID: {result['id']}")
             website_url = "https://www.snagpop.com"
             tracker_url = f"{website_url}/l/{deal['asin']}?s=fb"
-            fb_link = "https://www.facebook.com/snagpopofficial"
             try:
                 # Step 1: Post the link as a comment (posted by the Page itself)
                 comment_res = requests.post(
                     f"https://graph.facebook.com/v19.0/{result['id']}/comments",
                     data={
-                        'message': f"🛒 Grab it here: {tracker_url}\n\n📢 Follow us for more deals: {fb_link}",
+                        'message': f"🛒 Grab it here: {tracker_url}",
                         'access_token': FB_PAGE_ACCESS_TOKEN
                     }
                 ).json()
