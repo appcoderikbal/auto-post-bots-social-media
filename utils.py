@@ -179,9 +179,7 @@ def get_deal_caption(deal, platform="fb"):
     # 2. Emojis & Parts
     ep = {"box": "📦", "money": "💰", "cart": "🛒", "tag": "🏷️", "star": "🌟", "fire": "🔥", "check": "✅"}
 
-    # 3. Tracker URL (used in FB caption)
-    website_url = "https://www.snagpop.com"
-    tracker_url = f"{website_url}/l/{deal['asin']}?s={platform}"
+    # 3. ASIN — used by post_to_fb.py to build the link comment (not in caption)
 
     # 4. Randomized SEO Tags (Exactly 5)
     seo_tags_list = [
@@ -226,19 +224,19 @@ def get_deal_caption(deal, platform="fb"):
     disclosure = "As an Amazon Associate we earn from qualifying purchases."
 
     if platform == "ig":
-        # IG doesn't allow clickable links in captions — drive users to bio link.
+        # IG: no clickable links allowed in captions — direct to bio
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"\ud83d\udd17 Link in bio \u2192 grab the deal!\n\n"
-                   f"\ud83d\udd14 Follow @SnagPopOfficial so you never miss a deal!\n\n"
+                   f"🔗 Link in bio \u2192 grab the deal!\n\n"
+                   f"🔔 Follow @SnagPopOfficial so you never miss a deal!\n\n"
                    f"{disclosure}\n\n"
                    f"{seo_tags}")
     else:
-        # FB: real link in caption + link comment added after posting (see post_to_fb.py)
+        # FB: no link in caption — link is added as a comment after posting
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"\ud83d\uded2 Shop this deal \u2192 {tracker_url}\n\n"
-                   f"\ud83d\udd14 Follow @SnagPopOfficial for daily deals!\n\n"
+                   f"🛒 Deal link in the comments below \u2193\n\n"
+                   f"🔔 Follow @SnagPopOfficial for daily deals!\n\n"
                    f"{disclosure}\n\n"
                    f"{seo_tags}")
 
