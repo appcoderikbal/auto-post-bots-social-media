@@ -31,13 +31,11 @@ def post_carousel(deal):
         
         if 'id' in result:
             print(f"✅ Posted Carousel to Facebook! ID: {result['id']}")
-            # Add a link comment on the post
-            # NOTE: Facebook Graph API does NOT support pinning comments on Page posts
-            # via API (is_pinned field is read-only). The link is already in the caption.
             website_url = "https://www.snagpop.com"
             tracker_url = f"{website_url}/l/{deal['asin']}?s=fb"
             fb_link = "https://www.facebook.com/snagpopofficial"
             try:
+                # Step 1: Post the link as a comment (posted by the Page itself)
                 comment_res = requests.post(
                     f"https://graph.facebook.com/v19.0/{result['id']}/comments",
                     data={
@@ -45,12 +43,29 @@ def post_carousel(deal):
                         'access_token': FB_PAGE_ACCESS_TOKEN
                     }
                 ).json()
-                if 'id' in comment_res:
-                    print(f"💬 Deal link comment added! ID: {comment_res['id']}")
+
+                comment_id = comment_res.get('id')
+                if comment_id:
+                    print(f"💬 Link comment added! ID: {comment_id}")
+
+                    # Step 2: Pin the comment immediately
+                    # Requires 'pages_manage_engagement' permission on the Page Access Token
+                    pin_res = requests.post(
+                        f"https://graph.facebook.com/v19.0/{comment_id}",
+                        params={
+                            'is_pinned': 'true',
+                            'access_token': FB_PAGE_ACCESS_TOKEN
+                        }
+                    ).json()
+
+                    if pin_res.get('success'):
+                        print("📌 Comment pinned successfully!")
+                    else:
+                        print(f"⚠️ Pin failed (check pages_manage_engagement permission): {pin_res}")
                 else:
                     print(f"⚠️ Comment failed: {comment_res}")
             except Exception as e:
-                print(f"⚠️ Could not add link comment: {e}")
+                print(f"⚠️ Could not add/pin link comment: {e}")
             return True
     except Exception as e:
         print(f"❌ Error posting to FB: {e}")
