@@ -226,21 +226,19 @@ def get_deal_caption(deal, platform="fb"):
     disclosure = "As an Amazon Associate we earn from qualifying purchases."
 
     if platform == "ig":
-        # IG doesn't allow clickable links in captions.
-        # We ask users to comment "LINK" — a webhook can then auto-DM them the deal URL.
-        caption = (f"💬 Comment \"LINK\" below and I'll DM you the direct deal link! 👇\n\n"
-                   f"{random.choice(final_hooks)}\n\n"
+        # IG doesn't allow clickable links in captions — drive users to bio link.
+        caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"👉 Just drop \"LINK\" in the comments and I'll send it straight to your DMs!\n\n"
-                   f"🔔 Follow @SnagPopOfficial so you never miss a deal!\n\n"
+                   f"\ud83d\udd17 Link in bio \u2192 grab the deal!\n\n"
+                   f"\ud83d\udd14 Follow @SnagPopOfficial so you never miss a deal!\n\n"
                    f"{disclosure}\n\n"
                    f"{seo_tags}")
     else:
-        # FB: real link in caption body + pinned comment (see post_to_fb.py)
+        # FB: real link in caption + link comment added after posting (see post_to_fb.py)
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"🛒 Shop this deal → {tracker_url}\n\n"
-                   f"🔔 Follow @SnagPopOfficial for daily deals!\n\n"
+                   f"\ud83d\uded2 Shop this deal \u2192 {tracker_url}\n\n"
+                   f"\ud83d\udd14 Follow @SnagPopOfficial for daily deals!\n\n"
                    f"{disclosure}\n\n"
                    f"{seo_tags}")
 
