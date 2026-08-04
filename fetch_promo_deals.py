@@ -11,9 +11,17 @@ sys.stdout.reconfigure(encoding='utf-8')
 def fetch_promo_deals():
     print("🔄 Fetching fresh deals via Amazon Creators API...")
 
-    # Keywords likely to surface discounted items; PA-API filters by min saving.
-    query = random.choice(["deals", "today's deals", "best sellers", "top rated"])
-    deals = search_deals(query, search_index="All", min_saving_percent=20, item_count=10)
+    # Only fetch deals in our 3 focused categories
+    focused_searches = [
+        {"query": "home decor accessories",   "index": "HomeAndKitchen"},
+        {"query": "kitchen gadgets tools",    "index": "HomeAndKitchen"},
+        {"query": "tech gadgets electronics", "index": "Electronics"},
+        {"query": "smart home devices",       "index": "Electronics"},
+        {"query": "kitchen appliances",       "index": "HomeAndKitchen"},
+        {"query": "home decor living room",   "index": "HomeAndKitchen"},
+    ]
+    selected = random.choice(focused_searches)
+    deals = search_deals(selected["query"], search_index=selected["index"], min_saving_percent=20, item_count=10)
 
     if not deals:
         print("No results from Amazon (Creators API + fallback).")

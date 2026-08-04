@@ -9,14 +9,14 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 
 def refresh_deals():
-    # Category list for broader deal selection (query + Creators API search index)
+    # Only post deals in these 3 focused categories
     categories = [
-        {"query": "deals", "name": "Hot Deals", "index": "All"},
-        {"query": "tech gadgets electronics", "name": "Tech Gadgets", "index": "Electronics"},
-        {"query": "home appliances kitchen", "name": "Home Appliances", "index": "HomeAndKitchen"},
-        {"query": "best selling", "name": "Hot Deals", "index": "All"},
-        {"query": "gaming accessories", "name": "Gaming", "index": "VideoGames"},
-        {"query": "smart home devices", "name": "Smart Home", "index": "Electronics"},
+        {"query": "home decor accessories",         "name": "Home Decor",    "index": "HomeAndKitchen"},
+        {"query": "home decor wall art living room", "name": "Home Decor",    "index": "HomeAndKitchen"},
+        {"query": "kitchen gadgets tools",           "name": "Kitchen",       "index": "HomeAndKitchen"},
+        {"query": "kitchen appliances useful",       "name": "Kitchen",       "index": "HomeAndKitchen"},
+        {"query": "tech gadgets electronics",        "name": "Tech Gadgets",  "index": "Electronics"},
+        {"query": "smart home devices gadgets",      "name": "Tech Gadgets",  "index": "Electronics"},
     ]
 
     # Pick a random category to refresh
