@@ -31,20 +31,34 @@ def post_carousel(deal):
         
         if 'id' in result:
             print(f"✅ Posted Carousel to Facebook! ID: {result['id']}")
-            # Add comment with link
+            # Add pinned comment with the deal link
             website_url = "https://www.snagpop.com"
             tracker_url = f"{website_url}/l/{deal['asin']}?s=fb"
             fb_link = "https://www.facebook.com/snagpopofficial"
             try:
-                requests.post(
+                comment_res = requests.post(
                     f"https://graph.facebook.com/v19.0/{result['id']}/comments",
                     data={
-                        'message': f"🛒 Grab it here: {tracker_url}\n\n📢 Follow us on Facebook for more deals: {fb_link}",
+                        'message': f"🛒 Grab it here: {tracker_url}\n\n📢 Follow us for more deals: {fb_link}",
                         'access_token': FB_PAGE_ACCESS_TOKEN
                     }
-                )
+                ).json()
+                comment_id = comment_res.get('id')
+                if comment_id:
+                    print(f"📌 Comment posted (ID: {comment_id}). Pinning it...")
+                    # Pin the comment so it appears at the top
+                    pin_res = requests.post(
+                        f"https://graph.facebook.com/v19.0/{comment_id}",
+                        data={'is_pinned': 'true', 'access_token': FB_PAGE_ACCESS_TOKEN}
+                    ).json()
+                    if pin_res.get('success'):
+                        print("📌 Comment pinned successfully!")
+                    else:
+                        print(f"⚠️ Could not pin comment: {pin_res}")
+                else:
+                    print(f"⚠️ Comment post failed: {comment_res}")
             except Exception as e:
-                print(f"⚠️ Could not post comment: {e}")
+                print(f"⚠️ Could not post/pin comment: {e}")
             return True
     except Exception as e:
         print(f"❌ Error posting to FB: {e}")

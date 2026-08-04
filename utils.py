@@ -125,37 +125,37 @@ def get_deal_caption(deal, platform="fb"):
             "Main character energy starts here. ✨",
             "The 'it' item everyone is talking about. 👗",
             "Luxury vibes on a budget. 💅",
-            "Get the look for 70% less. 👠",
             "Your new favorite outfit just arrived. 🛍️",
             "Skin care routine? UPGRADED. 🧴",
             "The glow-up is real. 🌟",
             "Walk like the world is your runway. 💃",
             "Adding to cart in 3... 2... 1... 🛒",
-            "POV: You found the perfect fit on Amazon. 📸"
+            "POV: You found the perfect fit on Amazon. 📸",
+            "This one just hits different. 🔥"
         ],
         "savings": [
-            "I'm actually screaming at this price drop. 😱",
             "Stop overpaying! Check the price now. 🦆",
             "This deal is seriously good... 🤫",
-            "My jaw dropped when I saw the discount. 📉",
-            "Such a good price — grab it while it lasts! 🏃‍♂️",
+            "My jaw dropped when I saw this. 📉",
+            "Such a good find — grab it while it lasts! 🏃‍♂️",
             "A great time to buy. Seriously. 🗓️",
             "Your wallet's new best friend. 💰",
             "Save more than you spend. That's the goal. ✅",
-            "Lowest price in 30 days! Don't miss out. ⏰",
-            "I've never seen it this cheap before. EVER. 🚫"
+            "You're going to want to check this one out. 👀",
+            "This one is hard to ignore. 🤩",
+            "Deals like this don't stick around long. ⌛"
         ],
         "generic": [
-            "TikTok made me buy it, but the price made me LOVE it. 🎥",
+            "TikTok made me buy it and I have zero regrets. 🎥",
             "The hidden gem of Amazon. 💎",
             "Don't say I didn't warn you when it sells out. ⚠️",
             "Everyone is obsessed with this right now. 😍",
             "The gift that keeps on giving. 🎁",
             "Adding this to my wishlist immediately. ✨",
             "One for you, one for your bestie. 👯‍♀️",
-            "Wait until the end to see the price... 🫢",
-            "The reviews are 5-star for a reason. ⭐",
-            "Best $20 I ever spent. No cap. 🧢"
+            "This one is worth every penny. 🙌",
+            "Thousands of happy buyers can't be wrong. 🌟",
+            "Honestly didn't expect it to be this good. 😮"
         ]
     }
 
@@ -190,10 +190,6 @@ def get_deal_caption(deal, platform="fb"):
     if platform == "ig":
         cta = "link in bio -> all deals\n\n"
         url_text = ""
-    elif platform == "tg":
-        # Keep TG logic just in case, but it won't be called if removed from post_deals
-        cta = f"🛒 Grab it here: "
-        url_text = f"{tracker_url}\n\n📱 Follow us on Facebook: {fb_promo}"
     else: # fb
         cta = f"🛒 Grab it here: {tracker_url}\n\n"
         url_text = ""
@@ -213,6 +209,9 @@ def get_deal_caption(deal, platform="fb"):
     seo_tags = " ".join(seo_tags_list[:5])
 
     # 5. Dynamic Content Shuffling
+    # NOTE: Price, discount %, and review counts are intentionally excluded.
+    # Amazon Associates policy prohibits displaying prices (they change in real-time)
+    # and implies you cannot reproduce review counts or star ratings from Amazon.
     content_blocks = [
         f"{ep['box']} {deal['title']}\n\n",
     ]
@@ -238,20 +237,20 @@ def get_deal_caption(deal, platform="fb"):
     disclosure = "As an Amazon Associate we earn from qualifying purchases."
 
     if platform == "ig":
-        # IG can't use clickable links, so drive engagement: users comment "LINK" to get the deal
-        caption = (f"💬 Want it? Comment \"LINK\" below and we'll send you the deal! 👇\n\n"
+        # IG doesn't allow clickable links in captions.
+        # We ask users to comment "LINK" — a webhook can then auto-DM them the deal URL.
+        caption = (f"💬 Comment \"LINK\" below and I'll DM you the direct deal link! 👇\n\n"
                    f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"💬 Just comment \"LINK\" and we'll DM you the deal link!\n\n"
-                   f"🔔 Follow @SnagPopOfficial for daily deals!\n\n"
+                   f"👉 Just drop \"LINK\" in the comments and I'll send it straight to your DMs!\n\n"
+                   f"🔔 Follow @SnagPopOfficial so you never miss a deal!\n\n"
                    f"{disclosure}\n\n"
                    f"{seo_tags}")
     else:
-        # FB keeps the real link and also points to the link in the comments
+        # FB: real link in caption body + pinned comment (see post_to_fb.py)
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"🛒 GRAB IT HERE: {tracker_url}\n\n"
-                   f"👇 LINK in the comments too!\n\n"
+                   f"🛒 Shop this deal → {tracker_url}\n\n"
                    f"🔔 Follow @SnagPopOfficial for daily deals!\n\n"
                    f"{disclosure}\n\n"
                    f"{seo_tags}")

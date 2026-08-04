@@ -4,3 +4,4 @@ supabase
 yt-dlp
 google-generativeai
 playwright
+flask
