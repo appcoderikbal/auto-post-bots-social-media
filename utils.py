@@ -179,20 +179,9 @@ def get_deal_caption(deal, platform="fb"):
     # 2. Emojis & Parts
     ep = {"box": "📦", "money": "💰", "cart": "🛒", "tag": "🏷️", "star": "🌟", "fire": "🔥", "check": "✅"}
 
-    # 3. Call to Action logic
+    # 3. Tracker URL (used in FB caption)
     website_url = "https://www.snagpop.com"
     tracker_url = f"{website_url}/l/{deal['asin']}?s={platform}"
-    
-    url_text = ""
-    fb_promo = "https://www.facebook.com/snagpopofficial"
-    ig_promo = "https://www.instagram.com/snagpopofficial"
-    
-    if platform == "ig":
-        cta = "link in bio -> all deals\n\n"
-        url_text = ""
-    else: # fb
-        cta = f"🛒 Grab it here: {tracker_url}\n\n"
-        url_text = ""
 
     # 4. Randomized SEO Tags (Exactly 5)
     seo_tags_list = [
