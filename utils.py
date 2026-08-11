@@ -224,10 +224,10 @@ def get_deal_caption(deal, platform="fb"):
     disclosure = "As an Amazon Associate we earn from qualifying purchases."
 
     if platform == "ig":
-        # IG: no clickable links allowed in captions — direct to bio
+        # IG: no clickable links allowed in captions — prompt for comment to send DM
         caption = (f"{random.choice(final_hooks)}\n\n"
                    f"{main_body}"
-                   f"🔗 Link in bio \u2192 grab the deal!\n\n"
+                   f"💬 Comment 'link' in the comment box to get the link sent to your DMs!\n\n"
                    f"🔔 Follow @SnagPopOfficial so you never miss a deal!\n\n"
                    f"{disclosure}\n\n"
                    f"{seo_tags}")
