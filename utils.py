@@ -39,26 +39,51 @@ def tg_add_to_queue(asin, platform, category=None, product_data=None):
         print(f"⚠️ Could not queue {asin} for {platform}: {e}")
 
 
-def tg_get_next_deal(platform):
-    """Pull the oldest pending deal for a platform. Returns dict or None."""
+def tg_get_mixed_deals(platform, count=4):
+    """Pull up to `count` pending deals for a platform, mixed across different categories."""
     if not supabase:
         print("❌ Supabase client not initialized!")
-        return None
+        return []
     try:
+        # Fetch the oldest 30 deals to have a pool to mix from
         res = (
             supabase.table("telegram_queue")
             .select("*")
             .eq("platform", platform)
             .order("created_at")
-            .limit(1)
+            .limit(30)
             .execute()
         )
-        if res.data:
-            return res.data[0]
-        print(f"ℹ️ No deals queued for {platform}.")
+        if not res.data:
+            print(f"ℹ️ No deals queued for {platform}.")
+            return []
+            
+        # Group by category to shuffle them
+        deals_by_cat = {}
+        for d in res.data:
+            cat = d.get("category") or "Unknown"
+            if cat not in deals_by_cat:
+                deals_by_cat[cat] = []
+            deals_by_cat[cat].append(d)
+            
+        selected = []
+        cats = list(deals_by_cat.keys())
+        random.shuffle(cats)
+        
+        # Round-robin selection to ensure category diversity
+        while len(selected) < count and cats:
+            for cat in list(cats):
+                if deals_by_cat[cat]:
+                    selected.append(deals_by_cat[cat].pop(0))
+                    if len(selected) == count:
+                        break
+                else:
+                    cats.remove(cat)
+                    
+        return selected
     except Exception as e:
-        print(f"❌ Supabase error in tg_get_next_deal: {e}")
-    return None
+        print(f"❌ Supabase error in tg_get_mixed_deals: {e}")
+    return []
 
 
 def tg_delete_deal(row_id):

@@ -23,7 +23,7 @@ import pytz
 from dotenv import load_dotenv
 
 from amazon_client import search_deals
-from utils import tg_get_next_deal, tg_delete_deal, tg_add_to_queue, tg_is_queued, get_deal_caption, save_product_link, cleanup_old_product_links
+from utils import tg_get_mixed_deals, tg_delete_deal, tg_add_to_queue, tg_is_queued, get_deal_caption, save_product_link, cleanup_old_product_links
 
 load_dotenv()
 sys.stdout.reconfigure(encoding="utf-8")
@@ -153,41 +153,56 @@ def run():
         if last_hour:
             flushed = 0
             while True:
-                deal = tg_get_next_deal(platform)
-                if not deal:
+                deals = tg_get_mixed_deals(platform, count=10)
+                if not deals:
                     break
-                row_id = deal["id"]
-                print(f"  📦 Flushing: {deal.get('title', deal.get('asin'))}")
-                success = send_to_telegram(cfg["channel"], deal, platform)
-                if success:
-                    tg_delete_deal(row_id)
-                    flushed += 1
-                else:
-                    # On failure still delete so it doesn't carry to tomorrow
-                    print("  🗑️ Deleting failed deal to keep queue clean for tomorrow.")
-                    tg_delete_deal(row_id)
-                time.sleep(3)  # avoid Telegram rate limit between rapid posts
+                for deal in deals:
+                    row_id = deal["id"]
+                    print(f"  📦 Flushing: {deal.get('title', deal.get('asin'))}")
+                    success = send_to_telegram(cfg["channel"], deal, platform)
+                    if success:
+                        tg_delete_deal(row_id)
+                        flushed += 1
+                    else:
+                        print("  🗑️ Deleting failed deal to keep queue clean for tomorrow.")
+                        tg_delete_deal(row_id)
+                    time.sleep(3)  # avoid Telegram rate limit
 
             print(f"  ✅ Flushed {flushed} deal(s) for {platform}. Queue is now clean.")
 
-        # ── Normal hour: post one deal (DB first, then live fetch) ────────────
+        # ── Normal hour: post 3-4 mixed deals ────────────
         else:
-            deal   = tg_get_next_deal(platform)
-            row_id = None
-
-            if deal:
-                print(f"  📦 Using queued deal: {deal.get('title', deal.get('asin'))}")
+            num_posts = random.randint(3, 4)
+            print(f"  🎯 Target posts for this hour: {num_posts}")
+            
+            # Get up to num_posts mixed deals from DB
+            db_deals = tg_get_mixed_deals(platform, count=num_posts)
+            posted_count = 0
+            
+            for deal in db_deals:
                 row_id = deal["id"]
-            else:
-                deal = fetch_fresh_deal(cfg["region"])
-                if not deal:
-                    print(f"  ⚠️ No deal available for {platform} — skipping.")
-                    continue
-
-            success = send_to_telegram(cfg["channel"], deal, platform)
-            if success and row_id:
-                tg_delete_deal(row_id)
-                print(f"  🗑️ Removed from queue (row {row_id})")
+                print(f"  📦 Using queued deal: {deal.get('title', deal.get('asin'))}")
+                success = send_to_telegram(cfg["channel"], deal, platform)
+                if success:
+                    tg_delete_deal(row_id)
+                    print(f"  🗑️ Removed from queue (row {row_id})")
+                    posted_count += 1
+                time.sleep(3)
+                
+            # If we didn't have enough in DB, fill the rest with live Amazon fetches
+            while posted_count < num_posts:
+                print(f"  📡 Not enough deals in queue. Fetching live deal...")
+                live_deal = fetch_fresh_deal(cfg["region"])
+                if live_deal:
+                    success = send_to_telegram(cfg["channel"], live_deal, platform)
+                    if success:
+                        posted_count += 1
+                else:
+                    print(f"  ⚠️ No live deals available right now.")
+                    break
+                time.sleep(3)
+                
+            print(f"  ✅ Posted {posted_count}/{num_posts} deals for {platform}")
 
         time.sleep(2)  # buffer between channels
 
