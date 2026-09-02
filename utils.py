@@ -85,6 +85,35 @@ def tg_is_queued(asin, platform):
     return len(res.data) > 0
 
 
+# ── Product Links (Website Redirection) ────────
+
+def save_product_link(asin, region, affiliate_url, title=None):
+    """Save the affiliate link so the website can look it up."""
+    if not supabase: return
+    if not affiliate_url: return
+    try:
+        data = {
+            "asin": asin,
+            "region": region,
+            "affiliate_url": affiliate_url,
+            "title": title
+        }
+        supabase.table("product_links").upsert(data, on_conflict="asin,region").execute()
+    except Exception as e:
+        print(f"⚠️ Could not save product link for {asin}: {e}")
+
+def cleanup_old_product_links(days=3):
+    """Delete product links older than `days`."""
+    if not supabase: return
+    try:
+        from datetime import datetime, timedelta
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        supabase.table("product_links").delete().lt("created_at", cutoff).execute()
+        print(f"🧹 Cleaned up product links older than {days} days.")
+    except Exception as e:
+        print(f"⚠️ Error cleaning up product links: {e}")
+
+
 def get_deal_caption(deal, platform="telegram"):
     # 1. Extensive Hook Categories (50+ Hooks)
     title_lower = deal.get('title', '').lower()

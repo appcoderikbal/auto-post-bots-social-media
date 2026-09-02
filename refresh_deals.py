@@ -1,7 +1,7 @@
 import sys
 import random
 from dotenv import load_dotenv
-from utils import tg_add_to_queue
+from utils import tg_add_to_queue, save_product_link
 from amazon_client import search_deals
 
 load_dotenv()
@@ -42,6 +42,9 @@ def refresh_deals():
             if not asin:
                 continue
             tg_add_to_queue(asin, target_platform, category=category_name, product_data=item)
+            
+            # Save affiliate link for website redirect
+            save_product_link(asin, region, item.get("affiliate_url"), item.get("title"))
             count += 1
 
         print(f"Success! Syncing {count} fresh deals from {category_name} ({region}) to Supabase!")

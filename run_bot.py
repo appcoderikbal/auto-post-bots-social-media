@@ -23,7 +23,7 @@ import pytz
 from dotenv import load_dotenv
 
 from amazon_client import search_deals
-from utils import tg_get_next_deal, tg_delete_deal, tg_add_to_queue, tg_is_queued, get_deal_caption
+from utils import tg_get_next_deal, tg_delete_deal, tg_add_to_queue, tg_is_queued, get_deal_caption, save_product_link, cleanup_old_product_links
 
 load_dotenv()
 sys.stdout.reconfigure(encoding="utf-8")
@@ -87,7 +87,11 @@ def fetch_fresh_deal(region: str) -> dict | None:
     if not deals:
         print("  ⚠️ Amazon returned no deals.")
         return None
-    return deals[0]
+        
+    deal = deals[0]
+    # Save the affiliate link for the website
+    save_product_link(deal.get("asin"), region, deal.get("affiliate_url"), deal.get("title"))
+    return deal
 
 
 def send_to_telegram(channel: str, deal: dict, platform: str) -> bool:
@@ -129,6 +133,9 @@ def run():
     if not TELEGRAM_BOT_TOKEN:
         print("❌ TELEGRAM_BOT_TOKEN missing in .env")
         sys.exit(1)
+        
+    # Clean up product links older than 3 days
+    cleanup_old_product_links(days=3)
 
     for platform, cfg in REGIONS.items():
         print(f"\n{'─'*50}")

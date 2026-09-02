@@ -1,7 +1,7 @@
 import sys
 import random
 from dotenv import load_dotenv
-from utils import supabase, tg_add_to_queue, tg_is_queued
+from utils import supabase, tg_add_to_queue, tg_is_queued, save_product_link
 from amazon_client import search_deals
 
 load_dotenv()
@@ -43,6 +43,9 @@ def fetch_promo_deals():
                 continue
 
             tg_add_to_queue(asin, target_platform, category="Promo Deals", product_data=item)
+            
+            # Save affiliate link for website redirect
+            save_product_link(asin, region, item.get("affiliate_url"), item.get("title"))
 
             print(f"✅ Queued Promo Deal ({region}): {asin}")
             count += 1
