@@ -13,76 +13,79 @@ supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def is_posted(asin, platform):
-    """Checks Supabase to see if an ASIN has already been posted to a platform."""
-    if not supabase: return False
-    res = supabase.table("deals_queue").select("id").eq("asin", asin).eq("platform", platform).eq("status", "posted").execute()
-    return len(res.data) > 0
 
-def mark_posted(asin, platform, product_data=None):
-    """Updates Supabase status to 'posted' and saves product details for the website."""
-    if not supabase: return
-    from datetime import datetime
-    data = {
-        "status": "posted",
-        "created_at": datetime.now().isoformat()
-    }
-    if product_data:
-        data.update({
-            "title": product_data.get("title"),
-            "price": product_data.get("price"),
-            "old_price": product_data.get("old_price"),
-            "discount": product_data.get("discount"),
-            # NOTE: media (image URLs) and ratings intentionally NOT stored in Supabase
-            "affiliate_url": product_data.get("affiliate_url"),
-        })
-    supabase.table("deals_queue").update(data).eq("asin", asin).eq("platform", platform).execute()
+# ── Telegram Queue (telegram_queue table — rows deleted after posting) ────────
 
-def mark_failed(asin, platform):
-    """Updates Supabase status to 'failed' for a specific deal."""
-    if not supabase: return
-    supabase.table("deals_queue").update({"status": "failed"}).eq("asin", asin).eq("platform", platform).execute()
-
-def add_to_queue(asin, platform, category=None, product_data=None):
-    """Adds a new pending deal to the Supabase queue with full details if available."""
-    if not supabase: return
+def tg_add_to_queue(asin, platform, category=None, product_data=None):
+    """Insert a deal into telegram_queue. Silently skips duplicates."""
+    if not supabase:
+        return
     try:
         data = {
-            "asin": asin, 
-            "platform": platform, 
-            "status": "pending",
-            "category": category
+            "asin": asin,
+            "platform": platform,
+            "category": category,
+            "title": product_data.get("title") if product_data else None,
+            "price": product_data.get("price") if product_data else None,
+            "old_price": product_data.get("old_price") if product_data else None,
+            "discount": product_data.get("discount") if product_data else None,
+            "affiliate_url": product_data.get("affiliate_url") if product_data else None,
+            "image_url": product_data.get("image_url") if product_data else None,
+            "promo_code": product_data.get("promo_code") if product_data else None,
         }
-        if product_data:
-            data.update({
-                "title": product_data.get("title"),
-                "price": product_data.get("price"),
-                "old_price": product_data.get("old_price"),
-                "discount": product_data.get("discount"),
-                # NOTE: media (image URLs) and ratings intentionally NOT stored in Supabase
-                "affiliate_url": product_data.get("affiliate_url"),
-                "promo_code": product_data.get("promo_code")
-            })
-        supabase.table("deals_queue").upsert(data).execute()
+        # upsert ignores duplicate (asin + platform) due to unique index
+        supabase.table("telegram_queue").upsert(data, on_conflict="asin,platform").execute()
     except Exception as e:
-        print(f"⚠️ Could not add {asin} to {platform} queue: {e}")
+        print(f"⚠️ Could not queue {asin} for {platform}: {e}")
 
-def get_next_deal(platform):
-    """Pulls the next 'pending' deal from Supabase for a specific platform."""
-    if not supabase: 
+
+def tg_get_next_deal(platform):
+    """Pull the oldest pending deal for a platform. Returns dict or None."""
+    if not supabase:
         print("❌ Supabase client not initialized!")
         return None
     try:
-        res = supabase.table("deals_queue").select("*").eq("platform", platform).eq("status", "pending").order("created_at").limit(1).execute()
+        res = (
+            supabase.table("telegram_queue")
+            .select("*")
+            .eq("platform", platform)
+            .order("created_at")
+            .limit(1)
+            .execute()
+        )
         if res.data:
             return res.data[0]
-        else:
-            print(f"ℹ️ No pending deals found for {platform} in Supabase.")
+        print(f"ℹ️ No deals queued for {platform}.")
     except Exception as e:
-        print(f"❌ Supabase Error in get_next_deal: {e}")
+        print(f"❌ Supabase error in tg_get_next_deal: {e}")
     return None
 
-def get_deal_caption(deal, platform="fb"):
+
+def tg_delete_deal(row_id):
+    """Delete a deal row after it has been successfully posted."""
+    if not supabase:
+        return
+    try:
+        supabase.table("telegram_queue").delete().eq("id", row_id).execute()
+    except Exception as e:
+        print(f"⚠️ Could not delete deal row {row_id}: {e}")
+
+
+def tg_is_queued(asin, platform):
+    """Returns True if this ASIN is already in the queue for the platform."""
+    if not supabase:
+        return False
+    res = (
+        supabase.table("telegram_queue")
+        .select("id")
+        .eq("asin", asin)
+        .eq("platform", platform)
+        .execute()
+    )
+    return len(res.data) > 0
+
+
+def get_deal_caption(deal, platform="telegram"):
     # 1. Extensive Hook Categories (50+ Hooks)
     title_lower = deal.get('title', '').lower()
     
@@ -205,39 +208,19 @@ def get_deal_caption(deal, platform="fb"):
     if deal.get('promo_code'):
         content_blocks.append(f"🎫 PROMO CODE: {deal['promo_code']} (Apply at checkout)\n\n")
 
-    # Social Media Links
-    fb_link = "https://facebook.com/snagpopofficial"
-    ig_link = "https://instagram.com/snagpopofficial"
-    yt_link = "https://youtube.com/@snagpopofficial"
-    
-    social_footer = (
-        f"🔗 JOIN US FOR MORE:\n"
-        f"👥 Facebook: {fb_link}\n"
-        f"📸 Instagram: {ig_link}\n"
-        f"🎥 YouTube: {yt_link}\n"
-    )
-
     random.shuffle(content_blocks)
     main_body = "".join(content_blocks)
 
     # Required Amazon Associates disclosure
     disclosure = "As an Amazon Associate we earn from qualifying purchases."
 
-    if platform == "ig":
-        # IG: no clickable links allowed in captions — prompt for comment to send DM
-        caption = (f"{random.choice(final_hooks)}\n\n"
-                   f"{main_body}"
-                   f"💬 Comment 'link' in the comment box to get the link sent to your DMs!\n\n"
-                   f"🔔 Follow @SnagPopOfficial so you never miss a deal!\n\n"
-                   f"{disclosure}\n\n"
-                   f"{seo_tags}")
-    else:
-        # FB: no link in caption — link is added as a comment after posting
-        caption = (f"{random.choice(final_hooks)}\n\n"
-                   f"{main_body}"
-                   f"🛒 Deal link in the comments below \u2193\n\n"
-                   f"🔔 Follow @SnagPopOfficial for daily deals!\n\n"
-                   f"{disclosure}\n\n"
-                   f"{seo_tags}")
+    # Telegram: link can be directly in caption
+    link = f"https://www.snagpop.com/l/{deal['asin']}?s=tg"
+    caption = (f"{random.choice(final_hooks)}\n\n"
+               f"{main_body}"
+               f"🛒 Get it here: {link}\n\n"
+               f"🔔 Share with friends so they never miss a deal!\n\n"
+               f"{disclosure}\n\n"
+               f"{seo_tags}")
 
     return caption

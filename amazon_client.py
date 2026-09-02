@@ -31,11 +31,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- Credentials & config (from Associates Central -> Creators API) ----------
-CLIENT_ID = os.getenv("AMAZON_CREATORS_CLIENT_ID")
-CLIENT_SECRET = os.getenv("AMAZON_CREATORS_CLIENT_SECRET")
-PARTNER_TAG = os.getenv("AMAZON_CREATORS_PARTNER_TAG") or os.getenv("AMAZON_ASSOCIATE_TAG", "dealducker09-20")
-MARKETPLACE = os.getenv("AMAZON_MARKETPLACE", "www.amazon.com")
+# --- Config generator per region ----------
+def get_config(region="us"):
+    if region == "in":
+        return {
+            "client_id": os.getenv("AMAZON_CREATORS_CLIENT_ID_IN"),
+            "client_secret": os.getenv("AMAZON_CREATORS_CLIENT_SECRET_IN"),
+            "partner_tag": os.getenv("AMAZON_CREATORS_PARTNER_TAG_IN", "your-in-tag"),
+            "marketplace": os.getenv("AMAZON_MARKETPLACE_IN", "www.amazon.in"),
+            "country": "IN",
+        }
+    else:
+        return {
+            "client_id": os.getenv("AMAZON_CREATORS_CLIENT_ID_US") or os.getenv("AMAZON_CREATORS_CLIENT_ID"),
+            "client_secret": os.getenv("AMAZON_CREATORS_CLIENT_SECRET_US") or os.getenv("AMAZON_CREATORS_CLIENT_SECRET"),
+            "partner_tag": os.getenv("AMAZON_CREATORS_PARTNER_TAG_US") or os.getenv("AMAZON_CREATORS_PARTNER_TAG") or os.getenv("AMAZON_ASSOCIATE_TAG", "dealducker09-20"),
+            "marketplace": os.getenv("AMAZON_MARKETPLACE_US") or os.getenv("AMAZON_MARKETPLACE", "www.amazon.com"),
+            "country": "US",
+        }
 
 # Overridable in case Amazon changes hosts/scopes.
 TOKEN_URL = os.getenv("AMAZON_TOKEN_URL", "https://api.amazon.com/auth/o2/token")
@@ -43,15 +56,10 @@ API_BASE = os.getenv("AMAZON_CREATORS_API_BASE", "https://creatorsapi.amazon")
 SCOPE = os.getenv("AMAZON_CREATORS_SCOPE", "creatorsapi::default")
 
 # --- Fallback: Real-Time Amazon Data (RapidAPI) ------------------------------
-# Used only when the Creators API is unavailable (e.g. account not yet eligible).
-# Free tier on RapidAPI; reuses your existing RAPIDAPI_KEY (subscribe to the
-# "Real-Time Amazon Data" API in your RapidAPI account first).
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 REALTIME_AMAZON_HOST = os.getenv("REALTIME_AMAZON_HOST", "real-time-amazon-data.p.rapidapi.com")
-MARKETPLACE_COUNTRY = os.getenv("AMAZON_MARKETPLACE_COUNTRY", "US")
 FALLBACK_ENABLED = os.getenv("AMAZON_FALLBACK_ENABLED", "true").lower() == "true"
 
-# Resources requested from the API (analogous to PA-API resources).
 RESOURCES = [
     "itemInfo.title",
     "images.primary.large",
@@ -61,47 +69,49 @@ RESOURCES = [
     "customerReviews.count",
 ]
 
-_token = {"value": None, "expires_at": 0.0}
+_tokens = {"us": {"value": None, "expires_at": 0.0}, "in": {"value": None, "expires_at": 0.0}}
 
-
-def _get_token():
+def _get_token(region="us"):
     """Return a cached bearer token, refreshing via OAuth2 when expired."""
     now = time.time()
-    if _token["value"] and now < _token["expires_at"] - 60:
-        return _token["value"]
-    if not (CLIENT_ID and CLIENT_SECRET):
-        print("⚠️ Amazon Creators API credentials missing (AMAZON_CREATORS_CLIENT_ID / _SECRET).")
+    token_cache = _tokens.setdefault(region, {"value": None, "expires_at": 0.0})
+    if token_cache["value"] and now < token_cache["expires_at"] - 60:
+        return token_cache["value"]
+        
+    cfg = get_config(region)
+    if not (cfg["client_id"] and cfg["client_secret"]):
+        print(f"⚠️ Amazon Creators API credentials missing for region '{region}'.")
         return None
     try:
         res = requests.post(
             TOKEN_URL,
             data={
                 "grant_type": "client_credentials",
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
+                "client_id": cfg["client_id"],
+                "client_secret": cfg["client_secret"],
                 "scope": SCOPE,
             },
             timeout=15,
         ).json()
         token = res.get("access_token")
         if token:
-            _token["value"] = token
-            _token["expires_at"] = now + int(res.get("expires_in", 3600))
+            token_cache["value"] = token
+            token_cache["expires_at"] = now + int(res.get("expires_in", 3600))
             return token
-        print(f"❌ Token error: {res}")
+        print(f"❌ Token error for {region}: {res}")
     except Exception as e:
-        print(f"❌ Token request failed: {e}")
+        print(f"❌ Token request failed for {region}: {e}")
     return None
 
-
-def _headers():
-    token = _get_token()
+def _headers(region="us"):
+    token = _get_token(region)
     if not token:
         return None
+    cfg = get_config(region)
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "x-marketplace": MARKETPLACE,
+        "x-marketplace": cfg["marketplace"],
     }
 
 
@@ -123,7 +133,7 @@ def _dig(obj, *path):
     return obj
 
 
-def _map_item(item):
+def _map_item(item, region="us"):
     """Map a Creators API item object (dict) to the project's standard dict."""
     listing = _dig(item, "offersV2", "listings", 0)
     price_disp = _dig(listing, "price", "displayAmount")
@@ -167,9 +177,9 @@ def _map_item(item):
     }
 
 
-def _post(path, body):
+def _post(path, body, region="us"):
     """POST a JSON body to a Creators API endpoint; return parsed JSON or None."""
-    headers = _headers()
+    headers = _headers(region)
     if not headers:
         return None
     try:
@@ -188,7 +198,7 @@ def _post(path, body):
         return None
 
 
-def get_items(asins):
+def get_items(asins, region="us"):
     """Fetch up to 10 products by ASIN. Returns a list of product dicts."""
     asins = [a for a in (asins or []) if a][:10]
     if not asins:
@@ -198,27 +208,27 @@ def get_items(asins):
         "itemIds": asins,
         "itemIdType": "ASIN",
         "resources": RESOURCES,
-        "partnerTag": PARTNER_TAG,
+        "partnerTag": get_config(region)["partner_tag"],
         "partnerType": "Associates",
-        "marketplace": MARKETPLACE,
+        "marketplace": get_config(region)["marketplace"],
     }
-    data = _post("/catalog/v1/getItems", body)
+    data = _post("/catalog/v1/getItems", body, region=region)
     items = _dig(data, "itemResults", "items") or []
     if items:
-        return [_map_item(i) for i in items]
+        return [_map_item(i, region) for i in items]
     # Creators API returned nothing (e.g. account not eligible) -> fall back.
     if FALLBACK_ENABLED:
-        return [d for d in (_rapidapi_get_item(a) for a in asins) if d]
+        return [d for d in (_rapidapi_get_item(a, region) for a in asins) if d]
     return []
 
 
-def get_item(asin):
+def get_item(asin, region="us"):
     """Fetch a single product by ASIN. Returns a product dict or None."""
-    items = get_items([asin])
+    items = get_items([asin], region)
     return items[0] if items else None
 
 
-def search_deals(keywords, search_index="All", min_saving_percent=None, item_count=10):
+def search_deals(keywords, search_index="All", min_saving_percent=None, item_count=10, region="us"):
     """Search for deals by keyword. Returns a list of product dicts (may be empty)."""
     print(f"🔎 Searching Creators API: '{keywords}' (index={search_index})...")
     body = {
@@ -226,13 +236,13 @@ def search_deals(keywords, search_index="All", min_saving_percent=None, item_cou
         "searchIndex": search_index,
         "itemCount": min(item_count, 10),
         "resources": RESOURCES,
-        "partnerTag": PARTNER_TAG,
+        "partnerTag": get_config(region)["partner_tag"],
         "partnerType": "Associates",
-        "marketplace": MARKETPLACE,
+        "marketplace": get_config(region)["marketplace"],
     }
     if min_saving_percent:
         body["minSavingPercent"] = min_saving_percent
-    data = _post("/catalog/v1/searchItems", body)
+    data = _post("/catalog/v1/searchItems", body, region=region)
     # Response envelope not fully documented; try the likely candidates.
     items = (
         _dig(data, "searchResult", "items")
@@ -243,7 +253,7 @@ def search_deals(keywords, search_index="All", min_saving_percent=None, item_cou
         return [_map_item(i) for i in items]
     # Creators API returned nothing (e.g. account not eligible) -> fall back.
     if FALLBACK_ENABLED:
-        return _rapidapi_search(keywords, item_count=item_count)
+        return _rapidapi_search(keywords, item_count=item_count, region=region)
     return []
 
 
@@ -277,14 +287,14 @@ def _parse_price(value):
         return None
 
 
-def _tagged_url(base_url):
+def _tagged_url(base_url, region="us"):
     if not base_url:
         return None
     sep = "&" if urllib.parse.urlparse(base_url).query else "?"
-    return f"{base_url}{sep}tag={PARTNER_TAG}"
+    return f"{base_url}{sep}tag={get_config(region)['partner_tag']}"
 
 
-def _map_rtad(p):
+def _map_rtad(p, region="us"):
     """Map a Real-Time Amazon Data product dict to the project's standard dict."""
     price_disp = p.get("product_price")
     old_disp = p.get("product_original_price")
@@ -298,7 +308,7 @@ def _map_rtad(p):
         "old_price": old_disp,
         "discount": f"{pct}%" if pct else None,
         "discount_text": f" ({pct}% OFF!)" if pct else "",
-        "affiliate_url": _tagged_url(p.get("product_url")),
+        "affiliate_url": _tagged_url(p.get("product_url"), region),
         "image_url": photos[0] if photos else None,
         "image_list": [ph for ph in photos if ph][:5],
         "rating": p.get("product_star_rating"),
@@ -306,22 +316,22 @@ def _map_rtad(p):
     }
 
 
-def _rapidapi_get_item(asin):
+def _rapidapi_get_item(asin, region="us"):
     print(f"⤵️ Fetching ASIN {asin} via Real-Time Amazon Data...")
-    data = _rtad_get("/product-details", {"asin": asin, "country": MARKETPLACE_COUNTRY})
+    data = _rtad_get("/product-details", {"asin": asin, "country": get_config(region)["country"]})
     product = _dig(data, "data")
     if not product:
         if data is not None:
             print(f"⚠️ No product data for {asin}. Keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")
         return None
-    return _map_rtad(product)
+    return _map_rtad(product, region)
 
 
-def _rapidapi_search(keywords, item_count=10):
+def _rapidapi_search(keywords, item_count=10, region="us"):
     print(f"⤵️ Searching '{keywords}' via Real-Time Amazon Data...")
-    data = _rtad_get("/search", {"query": keywords, "country": MARKETPLACE_COUNTRY, "page": "1"})
+    data = _rtad_get("/search", {"query": keywords, "country": get_config(region)["country"], "page": "1"})
     products = _dig(data, "data", "products") or []
     if not products and data is not None:
         print(f"⚠️ Real-Time Amazon Data returned no products. "
               f"Keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")
-    return [_map_rtad(p) for p in products[:item_count] if p.get("asin")]
+    return [_map_rtad(p, region) for p in products[:item_count] if p.get("asin")]

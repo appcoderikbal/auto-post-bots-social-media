@@ -1,75 +1,56 @@
-name: Amazon Affiliate Bot
+name: Telegram Deal Bot
 
 on:
-  workflow_dispatch: # Manual trigger only (run from the Actions tab)
-  
-  repository_dispatch:
-    types: [trigger-post-deals] # External webhook trigger
+  schedule:
+    # Runs every hour at :00 UTC
+    # USA  window  8AM–1AM EST  = 13:00–06:00 UTC  (UTC-5 standard)
+    # IN   window  8AM–1AM IST  = 02:30–19:30 UTC  (UTC+5:30)
+    # Running every hour covers both windows — script skips if outside window
+    - cron: "0 * * * *"
 
-permissions:
-  contents: write
+  # Allow manual trigger from GitHub Actions UI
+  workflow_dispatch:
 
 jobs:
   post-deals:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      - name: Determine Actions
-        id: check_schedule
-        run: |
-          # FOR TESTING: Always enable all actions
-          echo "action_refresh=true" >> $GITHUB_OUTPUT
-          echo "action_fb=true" >> $GITHUB_OUTPUT
-          echo "action_ig=true" >> $GITHUB_OUTPUT
-          
-          echo "Automation test mode: All actions enabled."
-
-      - name: Run Scripts
+      - name: Run deal bot
         env:
-          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
-          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
-          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
-          AMAZON_CREATORS_CLIENT_ID: ${{ secrets.AMAZON_CREATORS_CLIENT_ID }}
-          AMAZON_CREATORS_CLIENT_SECRET: ${{ secrets.AMAZON_CREATORS_CLIENT_SECRET }}
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          RAPIDAPI_HOST: ${{ secrets.RAPIDAPI_HOST }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: |
-          echo "Debug: action_refresh=${{ steps.check_schedule.outputs.action_refresh }}"
-          echo "Debug: action_fb=${{ steps.check_schedule.outputs.action_fb }}"
-          echo "Debug: action_ig=${{ steps.check_schedule.outputs.action_ig }}"
-          
-          # 1. Refresh deals if needed
-          if [ "${{ steps.check_schedule.outputs.action_refresh }}" == "true" ]; then
-            echo "Running fetch_promo_deals.py..."
-            python fetch_promo_deals.py
-            echo "Running refresh_deals.py..."
-            python refresh_deals.py
-          fi
-          
-          # 3. Post to Facebook Carousel
-          if [ "${{ steps.check_schedule.outputs.action_fb }}" == "true" ]; then
-            echo "Running post_to_fb.py..."
-            python post_to_fb.py
-          fi
-
-          # 4. Post to Instagram Carousel
-          if [ "${{ steps.check_schedule.outputs.action_ig }}" == "true" ]; then
-            echo "Running post_to_ig.py..."
-            python post_to_ig.py
-          fi
+          TELEGRAM_BOT_TOKEN:              ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_US:             ${{ secrets.TELEGRAM_CHANNEL_US }}
+          TELEGRAM_CHANNEL_IN:             ${{ secrets.TELEGRAM_CHANNEL_IN }}
+          SUPABASE_URL:                    ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:                    ${{ secrets.SUPABASE_KEY }}
+          AMAZON_CREATORS_CLIENT_ID_US:    ${{ secrets.AMAZON_CREATORS_CLIENT_ID_US }}
+          AMAZON_CREATORS_CLIENT_SECRET_US: ${{ secrets.AMAZON_CREATORS_CLIENT_SECRET_US }}
+          AMAZON_CREATORS_PARTNER_TAG_US:  ${{ secrets.AMAZON_CREATORS_PARTNER_TAG_US }}
+          AMAZON_MARKETPLACE_US:           ${{ secrets.AMAZON_MARKETPLACE_US }}
+          AMAZON_CREATORS_CLIENT_ID_IN:    ${{ secrets.AMAZON_CREATORS_CLIENT_ID_IN }}
+          AMAZON_CREATORS_CLIENT_SECRET_IN: ${{ secrets.AMAZON_CREATORS_CLIENT_SECRET_IN }}
+          AMAZON_CREATORS_PARTNER_TAG_IN:  ${{ secrets.AMAZON_CREATORS_PARTNER_TAG_IN }}
+          AMAZON_MARKETPLACE_IN:           ${{ secrets.AMAZON_MARKETPLACE_IN }}
+          RAPIDAPI_KEY:                    ${{ secrets.RAPIDAPI_KEY }}
+          AMAZON_FALLBACK_ENABLED:         "true"
+        run: python run_bot.py

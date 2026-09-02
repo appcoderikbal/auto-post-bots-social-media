@@ -1,7 +1,7 @@
 import sys
 import random
 from dotenv import load_dotenv
-from utils import add_to_queue
+from utils import tg_add_to_queue
 from amazon_client import search_deals
 
 load_dotenv()
@@ -27,23 +27,24 @@ def refresh_deals():
 
     print(f"Refreshing deals for category: '{category_name}' (Query: '{query}')...")
 
-    deals = search_deals(query, search_index=search_index, min_saving_percent=15, item_count=10)
+    platforms = ["us", "in"]
+    for region in platforms:
+        deals = search_deals(query, search_index=search_index, min_saving_percent=15, item_count=10, region=region)
 
-    if not deals:
-        print("No results from Creators API.")
-        return
-
-    count = 0
-    for item in deals:
-        asin = item.get("asin")
-        if not asin:
+        if not deals:
+            print(f"No results from Creators API for {region}.")
             continue
-        # Image URLs are intentionally not persisted; see utils.add_to_queue.
-        target_platform = random.choice(["fb", "ig"])
-        add_to_queue(asin, target_platform, category=category_name, product_data=item)
-        count += 1
 
-    print(f"Success! Syncing {count} fresh deals from {category_name} to Supabase!")
+        count = 0
+        target_platform = f"telegram_{region}"
+        for item in deals:
+            asin = item.get("asin")
+            if not asin:
+                continue
+            tg_add_to_queue(asin, target_platform, category=category_name, product_data=item)
+            count += 1
+
+        print(f"Success! Syncing {count} fresh deals from {category_name} ({region}) to Supabase!")
 
 
 if __name__ == "__main__":
