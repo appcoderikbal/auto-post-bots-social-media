@@ -23,7 +23,7 @@ import pytz
 from dotenv import load_dotenv
 
 from amazon_client import search_deals
-from utils import tg_get_mixed_deals, tg_delete_deal, tg_add_to_queue, tg_is_queued, get_deal_caption, save_product_link, cleanup_old_product_links
+from utils import tg_get_mixed_deals, tg_delete_deal, tg_add_to_queue, tg_is_queued, get_deal_caption, save_product_link, cleanup_old_product_links, is_recently_processed
 
 load_dotenv()
 sys.stdout.reconfigure(encoding="utf-8")
@@ -88,10 +88,14 @@ def fetch_fresh_deal(region: str) -> dict | None:
         print("  ⚠️ Amazon returned no deals.")
         return None
         
-    deal = deals[0]
-    # Save the affiliate link for the website
-    save_product_link(deal.get("asin"), region, deal.get("affiliate_url"), deal.get("title"))
-    return deal
+    for deal in deals:
+        if not tg_is_queued(deal.get("asin"), f"telegram_{region}") and not is_recently_processed(deal.get("asin"), region):
+            # Save the affiliate link for the website
+            save_product_link(deal.get("asin"), region, deal.get("affiliate_url"), deal.get("title"))
+            return deal
+            
+    print("  ⚠️ All fetched live deals were recently processed or queued.")
+    return None
 
 
 def send_to_telegram(channel: str, deal: dict, platform: str) -> bool:

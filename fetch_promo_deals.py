@@ -1,7 +1,7 @@
 import sys
 import random
 from dotenv import load_dotenv
-from utils import supabase, tg_add_to_queue, tg_is_queued, save_product_link
+from utils import supabase, tg_add_to_queue, tg_is_queued, save_product_link, is_recently_processed
 from amazon_client import search_deals
 
 load_dotenv()
@@ -38,8 +38,8 @@ def fetch_promo_deals():
             if not asin:
                 continue
 
-            # Skip if already in queue
-            if tg_is_queued(asin, target_platform):
+            # Skip if already in queue or processed in the last 3 days
+            if tg_is_queued(asin, target_platform) or is_recently_processed(asin, region):
                 continue
 
             tg_add_to_queue(asin, target_platform, category="Promo Deals", product_data=item)

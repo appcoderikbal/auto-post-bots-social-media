@@ -1,7 +1,7 @@
 import sys
 import random
 from dotenv import load_dotenv
-from utils import tg_add_to_queue, save_product_link
+from utils import tg_add_to_queue, save_product_link, tg_is_queued, is_recently_processed
 from amazon_client import search_deals
 
 load_dotenv()
@@ -41,6 +41,10 @@ def refresh_deals():
             asin = item.get("asin")
             if not asin:
                 continue
+                
+            if tg_is_queued(asin, target_platform) or is_recently_processed(asin, region):
+                continue
+                
             tg_add_to_queue(asin, target_platform, category=category_name, product_data=item)
             
             # Save affiliate link for website redirect

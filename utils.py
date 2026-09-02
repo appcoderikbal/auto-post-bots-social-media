@@ -138,6 +138,11 @@ def cleanup_old_product_links(days=3):
     except Exception as e:
         print(f"⚠️ Error cleaning up product links: {e}")
 
+def is_recently_processed(asin, region):
+    """Returns True if the ASIN exists in product_links (meaning we fetched it in the last 3 days)."""
+    if not supabase: return False
+    res = supabase.table("product_links").select("id").eq("asin", asin).eq("region", region).execute()
+    return len(res.data) > 0
 
 def get_deal_caption(deal, platform="telegram"):
     # 1. Extensive Hook Categories (50+ Hooks)
