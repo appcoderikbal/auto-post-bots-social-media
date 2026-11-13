@@ -79,7 +79,7 @@ jobs:
           # Anything that isn't GitHub's own cron owns its own timing, so it
           # posts immediately; scheduled runs still honour the ET slot check.
           SOCIAL_FORCE:                     ${{ github.event_name != 'schedule' }}
-          SOCIAL_DRY_RUN:                   ${{ inputs.dry_run }}
-          # From cron-job.org's client_payload, or the manual dispatch dropdown.
+          # From cron-job.org's client_payload, or the manual dispatch form.
+          SOCIAL_DRY_RUN:                   ${{ github.event.client_payload.dry_run || inputs.dry_run }}
           SOCIAL_PLATFORM:                  ${{ github.event.client_payload.platform || inputs.platform }}
         run: python post_social.py
