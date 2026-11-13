@@ -4,3 +4,6 @@ __pycache__/
 .vscode/
 .idea/
 *.log
+
+# Credential discovery output — never commit
+*.local.txt
