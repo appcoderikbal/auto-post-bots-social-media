@@ -171,7 +171,7 @@ def _map_item(item, region="us"):
         # detailPageURL is already tagged with the partner tag by the API.
         "affiliate_url": _dig(item, "detailPageURL"),
         "image_url": images[0] if images else None,
-        "image_list": images[:5],
+        "image_list": images[:10],   # Instagram carousels cap at 10
         "rating": rating,
         "reviews_count": reviews_count,
     }
@@ -294,13 +294,37 @@ def _tagged_url(base_url, region="us"):
     return f"{base_url}{sep}tag={get_config(region)['partner_tag']}"
 
 
+def _photo_urls(photos):
+    """Normalize a product_photos list into plain image URLs.
+
+    Entries come back either as bare URL strings or as objects carrying a
+    title (e.g. {"title": "Product Overview Video", "url": ...}). Videos are
+    skipped — they can't go in a photo carousel.
+    """
+    urls = []
+    for item in photos or []:
+        if isinstance(item, str):
+            url = item
+        elif isinstance(item, dict):
+            if "video" in str(item.get("title") or "").lower():
+                continue
+            url = item.get("url") or item.get("link") or item.get("image")
+        else:
+            continue
+        if isinstance(url, str) and url.startswith("http") and url not in urls:
+            urls.append(url)
+    return urls
+
+
 def _map_rtad(p, region="us"):
     """Map a Real-Time Amazon Data product dict to the project's standard dict."""
     price_disp = p.get("product_price")
     old_disp = p.get("product_original_price")
     cur, old = _parse_price(price_disp), _parse_price(old_disp)
     pct = round((old - cur) / old * 100) if (old and cur and old > cur) else None
-    photos = p.get("product_photos") or ([p.get("product_photo")] if p.get("product_photo") else [])
+    # /product-details returns the full `product_photos` array; /search only
+    # ever returns a single `product_photo`.
+    photos = _photo_urls(p.get("product_photos")) or _photo_urls([p.get("product_photo")])
     return {
         "asin": p.get("asin"),
         "title": p.get("product_title", "Amazing Amazon Find!"),
@@ -310,7 +334,7 @@ def _map_rtad(p, region="us"):
         "discount_text": f" ({pct}% OFF!)" if pct else "",
         "affiliate_url": _tagged_url(p.get("product_url"), region),
         "image_url": photos[0] if photos else None,
-        "image_list": [ph for ph in photos if ph][:5],
+        "image_list": photos[:10],   # Instagram carousels cap at 10
         "rating": p.get("product_star_rating"),
         "reviews_count": p.get("product_num_ratings"),
     }

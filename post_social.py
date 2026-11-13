@@ -34,7 +34,7 @@ from datetime import datetime
 import pytz
 from dotenv import load_dotenv
 
-from amazon_client import search_deals
+from amazon_client import search_deals, get_item
 from social_hooks import pick_hook, is_kitchen
 from utils import (
     tg_get_mixed_deals,
@@ -236,6 +236,45 @@ def gather_candidates(platform, prefer_kitchen):
     return fresh
 
 
+def enrich_images(deal):
+    """Fetch the product's full image set before posting.
+
+    Deals sourced from a keyword search carry a single image: the Creators
+    API search envelope and RapidAPI's /search both return one photo per hit
+    (`product_photo`, singular). The per-product lookup returns the whole
+    `product_photos` array, which is what a carousel needs — so spend one
+    extra call on the single deal we're actually about to publish.
+    """
+    have = [i for i in (deal.get("image_list") or []) if i]
+    if len(have) >= 2:
+        print(f"  🖼️ {len(have)} image(s) already — no lookup needed.")
+        return deal
+
+    print(f"  🖼️ Only {len(have)} image — fetching the full set for {deal['asin']}...")
+    try:
+        full = get_item(deal["asin"], region="us")
+    except Exception as e:
+        print(f"  ⚠️ Image lookup failed: {e}")
+        return deal
+
+    if not full:
+        print("  ⚠️ Product lookup returned nothing — posting with what we have.")
+        return deal
+
+    richer = [i for i in (full.get("image_list") or []) if i]
+    if len(richer) > len(have):
+        print(f"  ✅ Images: {len(have)} → {len(richer)}")
+        deal["image_list"] = richer
+        deal["image_url"] = richer[0]
+        # The detail endpoint also carries better review data than search does.
+        for field in ("rating", "reviews_count", "discount", "price"):
+            if not deal.get(field) and full.get(field):
+                deal[field] = full[field]
+    else:
+        print(f"  ℹ️ No extra images available (still {len(have)}).")
+    return deal
+
+
 def pick_best(platform):
     """Return the highest-scoring unposted deal for this platform, or None."""
     prefer_kitchen = platform == "ig"
@@ -263,8 +302,7 @@ def pick_best(platform):
 def post_facebook(deal, hook, dry_run=False):
     """Post to the Page with the product link + Telegram invite in the body."""
     caption = get_social_caption(deal, "fb", hook)
-    images  = (deal.get("image_list") or [deal.get("image_url")])[:5]
-    images  = [i for i in images if i]
+    images  = [i for i in (deal.get("image_list") or [deal.get("image_url")]) if i][:10]
 
     if dry_run:
         print(f"\n--- FACEBOOK caption ({len(images)} image(s)) ---\n{caption}\n---")
@@ -427,6 +465,8 @@ def run_platform(platform, recent_hooks, dry_run=False):
     if not deal:
         print(f"  ⚠️ No eligible deal for {platform.upper()} right now.")
         return None, None
+
+    deal = enrich_images(deal)
 
     hook = pick_hook(deal, recent_hooks=recent_hooks)
     print(f"  🎣 Hook: {hook}")
