@@ -22,6 +22,18 @@ on:
         description: "Pick a deal and print the captions without posting"
         type: boolean
         default: false
+      platform:
+        description: "Which network to post to"
+        type: choice
+        default: both
+        options: [both, fb, ig]
+
+  # External trigger for cron-job.org. POST to
+  #   https://api.github.com/repos/<owner>/<repo>/dispatches
+  # with {"event_type":"trigger-social-post","client_payload":{"platform":"ig"}}
+  # Omit client_payload.platform to post to both networks.
+  repository_dispatch:
+    types: [trigger-social-post]
 
 jobs:
   post-social:
@@ -64,7 +76,10 @@ jobs:
           RAPIDAPI_KEY:                     ${{ secrets.RAPIDAPI_KEY }}
           AMAZON_FALLBACK_ENABLED:          "true"
           SOCIAL_POST_HOURS:                "9,13,17,20"
-          # Empty on a scheduled run, so the ET slot check applies as normal.
-          FORCE_FLAG:                       ${{ inputs.force && '--force' || '' }}
-          DRY_RUN_FLAG:                     ${{ inputs.dry_run && '--dry-run' || '' }}
-        run: python post_social.py $FORCE_FLAG $DRY_RUN_FLAG
+          # Anything that isn't GitHub's own cron owns its own timing, so it
+          # posts immediately; scheduled runs still honour the ET slot check.
+          SOCIAL_FORCE:                     ${{ github.event_name != 'schedule' }}
+          SOCIAL_DRY_RUN:                   ${{ inputs.dry_run }}
+          # From cron-job.org's client_payload, or the manual dispatch dropdown.
+          SOCIAL_PLATFORM:                  ${{ github.event.client_payload.platform || inputs.platform }}
+        run: python post_social.py

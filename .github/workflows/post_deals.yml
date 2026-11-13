@@ -11,6 +11,12 @@ on:
   # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
 
+  # External trigger for cron-job.org. POST to
+  #   https://api.github.com/repos/<owner>/<repo>/dispatches
+  # with {"event_type":"trigger-telegram-post"}
+  repository_dispatch:
+    types: [trigger-telegram-post]
+
 jobs:
   post-deals:
     runs-on: ubuntu-latest

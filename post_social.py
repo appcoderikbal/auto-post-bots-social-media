@@ -442,13 +442,32 @@ def run_platform(platform, recent_hooks, dry_run=False):
     return hook, (post_id, deal.get("title"))
 
 
+def _env_flag(name):
+    """Read a boolean-ish env var. GitHub passes literal 'true'/'false'."""
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def run():
-    args      = sys.argv[1:]
-    force     = "--force" in args
-    dry_run   = "--dry-run" in args
+    args    = sys.argv[1:]
+    # CLI flags for local use; env vars so CI doesn't need YAML expression
+    # gymnastics to build an argument string.
+    force   = "--force" in args or _env_flag("SOCIAL_FORCE")
+    dry_run = "--dry-run" in args or _env_flag("SOCIAL_DRY_RUN")
+
     platforms = ["fb", "ig"]
+    requested = None
     if "--platform" in args:
-        platforms = [args[args.index("--platform") + 1]]
+        requested = args[args.index("--platform") + 1]
+    elif os.getenv("SOCIAL_PLATFORM", "").strip():
+        requested = os.getenv("SOCIAL_PLATFORM").strip()
+
+    if requested and requested.lower() not in ("", "both", "all"):
+        requested = requested.lower()
+        if requested not in ("fb", "ig"):
+            print(f"❌ Unknown platform '{requested}' — expected fb, ig, or both.")
+            sys.exit(1)
+        platforms = [requested]
+    print(f"🎯 Target platform(s): {', '.join(p.upper() for p in platforms)}")
 
     if not force and not dry_run and current_slot() is None:
         print("✅ Nothing to do this hour.")
