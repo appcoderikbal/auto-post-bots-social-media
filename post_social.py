@@ -56,10 +56,12 @@ FB_PAGE_ID           = os.getenv("FB_PAGE_ID")
 FB_PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN")
 IG_ACCOUNT_ID        = os.getenv("INSTAGRAM_ACCOUNT_ID")
 
-# Second Instagram account, kitchen deals only. If it hangs off a different
-# Facebook Page it needs that Page's token; otherwise the main one is reused.
+# "Kitchen Finds" — its own Facebook Page plus the Instagram account linked to
+# it. A Page token only works for its own Page, so this pair needs its own
+# token; it falls back to the main one if both sit on the same Page.
+FB_KITCHEN_PAGE_ID    = os.getenv("FB_PAGE_ID_KITCHEN")
 IG_KITCHEN_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID_KITCHEN")
-IG_KITCHEN_TOKEN      = os.getenv("FB_PAGE_ACCESS_TOKEN_KITCHEN") or FB_PAGE_ACCESS_TOKEN
+KITCHEN_TOKEN         = os.getenv("FB_PAGE_ACCESS_TOKEN_KITCHEN") or FB_PAGE_ACCESS_TOKEN
 
 # Facebook Place ID for location tagging (default: New York, United States)
 FB_LOCATION_ID       = os.getenv("FB_LOCATION_ID", "110843418940484")
@@ -73,33 +75,43 @@ GRAPH                = "https://graph.facebook.com/v21.0"
 # `source` is the ?s= tag on the tracking link, so each account is attributable.
 
 PLATFORMS = {
+    # ── SnagPop — general deals ──────────────────────────────────────────────
     "fb": {
-        "label":    "Facebook",
+        "label":    "SnagPop Facebook",
         "kind":     "fb",
         "source":   "fb",
         "target":   FB_PAGE_ID,
         "token":    FB_PAGE_ACCESS_TOKEN,
-        "category": None,
+        "category": "general",
     },
     "ig": {
-        "label":    "Instagram (main)",
+        "label":    "SnagPop Instagram",
         "kind":     "ig",
         "source":   "ig",
         "target":   IG_ACCOUNT_ID,
         "token":    FB_PAGE_ACCESS_TOKEN,
         "category": "general",
     },
+    # ── Kitchen Finds — kitchen deals ────────────────────────────────────────
+    "fb_kitchen": {
+        "label":    "Kitchen Finds Facebook",
+        "kind":     "fb",
+        "source":   "fbk",
+        "target":   FB_KITCHEN_PAGE_ID,
+        "token":    KITCHEN_TOKEN,
+        "category": "kitchen",
+    },
     "ig_kitchen": {
-        "label":    "Instagram (kitchen)",
+        "label":    "Kitchen Finds Instagram",
         "kind":     "ig",
         "source":   "igk",
         "target":   IG_KITCHEN_ACCOUNT_ID,
-        "token":    IG_KITCHEN_TOKEN,
+        "token":    KITCHEN_TOKEN,
         "category": "kitchen",
     },
 }
 
-DEFAULT_PLATFORMS = ["fb", "ig", "ig_kitchen"]
+DEFAULT_PLATFORMS = ["fb", "ig", "fb_kitchen", "ig_kitchen"]
 
 TIMEZONE = os.getenv("SOCIAL_TIMEZONE", "America/New_York")
 # 4 slots a day, US Eastern. Set to "9,14,19" for 3.
@@ -223,8 +235,20 @@ def _normalize(row):
     }
 
 
-def gather_candidates(platform, category):
-    """Collect deal candidates from the Telegram queue plus a live Amazon search."""
+# Candidate pools are fetched once per category per run. The Facebook and
+# Instagram accounts of the same brand want the same category, so without this
+# a four-account run would fire eight Amazon searches instead of four.
+_POOL_CACHE = {}
+
+
+def _raw_pool(category):
+    """Build (and cache for this run) the candidate pool for a category."""
+    if category in _POOL_CACHE:
+        pool = _POOL_CACHE[category]
+        print(f"  ♻️ Reusing the '{category}' pool from earlier this run "
+              f"({len(pool)} deal(s), no extra API calls).")
+        return pool
+
     pool, seen = [], set()
 
     def add(deal):
@@ -262,9 +286,19 @@ def gather_candidates(platform, category):
             print(f"⚠️ Amazon search failed for '{cat['query']}': {e}")
     print(f"  📥 {len(pool)} candidate(s) total after the live search.")
 
-    # 3. Drop anything already posted on this network.
+    _POOL_CACHE[category] = pool
+    return pool
+
+
+def gather_candidates(platform, category):
+    """Candidates for this account: the category pool minus what it already posted."""
+    pool = _raw_pool(category)
+
+    # Dedupe is per account, so the same product can appear on the Facebook
+    # Page and the Instagram account of the same brand — that's cross-posting,
+    # not a repeat.
     fresh = [d for d in pool if not social_is_posted(d["asin"], platform)]
-    print(f"  🔁 {len(pool) - len(fresh)} already posted to {platform.upper()}, "
+    print(f"  🔁 {len(pool) - len(fresh)} already posted to {platform}, "
           f"{len(fresh)} remain.")
     return fresh
 
