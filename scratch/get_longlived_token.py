@@ -134,10 +134,52 @@ def main():
             lines += [f"INSTAGRAM_ACCOUNT_ID={ig.get('id')}  # @{ig.get('username')}"]
         lines.append("")
 
+    # ── Step 3: map each Page to the right GitHub secret ────────────────────
+    # Both Pages can live under one user and one app, but a Page token only
+    # works for its own Page — so each Page/IG pair needs its own secret.
+    kitchen_ig = os.getenv("KITCHEN_IG_ID", "17841448925521306")
+
+    def is_kitchen(page):
+        ig = page.get("instagram_business_account") or {}
+        return (str(ig.get("id")) == kitchen_ig
+                or "kitchen" in str(ig.get("username", "")).lower()
+                or "kitchen" in str(page.get("name", "")).lower())
+
+    kitchen = [p for p in data if is_kitchen(p)]
+    main    = [p for p in data if not is_kitchen(p)]
+
+    print(f"{'─' * 62}\n🔧 GITHUB SECRETS — copy these across\n")
+    secrets = []
+    if main:
+        p  = main[0]
+        ig = p.get("instagram_business_account") or {}
+        secrets += [("FB_PAGE_ID", p["id"]),
+                    ("FB_PAGE_ACCESS_TOKEN", p["access_token"])]
+        if ig:
+            secrets.append(("INSTAGRAM_ACCOUNT_ID", ig["id"]))
+        print(f"   main    → {p['name']}" + (f"  @{ig.get('username')}" if ig else ""))
+    if kitchen:
+        p  = kitchen[0]
+        ig = p.get("instagram_business_account") or {}
+        secrets.append(("FB_PAGE_ACCESS_TOKEN_KITCHEN", p["access_token"]))
+        if ig:
+            secrets.append(("INSTAGRAM_ACCOUNT_ID_KITCHEN", ig["id"]))
+        print(f"   kitchen → {p['name']}" + (f"  @{ig.get('username')}" if ig else ""))
+    else:
+        print("   ⚠️ No kitchen Page matched. Set KITCHEN_IG_ID in .env to force it.")
+
+    print()
+    for name, value in secrets:
+        shown = value if "TOKEN" not in name else mask(value)
+        print(f"   {name:32s} = {shown}")
+
+    lines += ["", "## GitHub secrets", ""]
+    lines += [f"{n}={v}" for n, v in secrets]
+
     with open(OUT, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-    print(f"📝 Full tokens written to:\n   {OUT}")
+    print(f"\n📝 Full tokens (unmasked) written to:\n   {OUT}")
     print("   (gitignored — copy into GitHub secrets, then delete this file)")
 
 
