@@ -1,0 +1,70 @@
+name: Facebook + Instagram Deal Bot
+
+on:
+  schedule:
+    # Posts 4x a day on US Eastern: 9 AM, 1 PM, 5 PM, 8 PM ET.
+    # GitHub cron is UTC and ignores DST, so we fire on every UTC hour that
+    # could map to a slot under EST (UTC-5) or EDT (UTC-4); post_social.py
+    # checks the real ET hour and skips the runs that aren't a slot.
+    #   9 AM ET -> 13:00 / 14:00 UTC
+    #   1 PM ET -> 17:00 / 18:00 UTC
+    #   5 PM ET -> 21:00 / 22:00 UTC
+    #   8 PM ET -> 00:00 / 01:00 UTC
+    - cron: "0 0,1,13,14,17,18,21,22 * * *"
+
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Post immediately, ignoring the ET schedule"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Pick a deal and print the captions without posting"
+        type: boolean
+        default: false
+
+jobs:
+  post-social:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Post best deal to Facebook + Instagram
+        env:
+          FB_PAGE_ID:                       ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN:             ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+          INSTAGRAM_ACCOUNT_ID:             ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          FB_LOCATION_ID:                   ${{ secrets.FB_LOCATION_ID }}
+          TELEGRAM_CHANNEL_US:              ${{ secrets.TELEGRAM_CHANNEL_US }}
+          SUPABASE_URL:                     ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:                     ${{ secrets.SUPABASE_KEY }}
+          AMAZON_CREATORS_CLIENT_ID_US:     ${{ secrets.AMAZON_CREATORS_CLIENT_ID_US }}
+          AMAZON_CREATORS_CLIENT_SECRET_US: ${{ secrets.AMAZON_CREATORS_CLIENT_SECRET_US }}
+          AMAZON_CREATORS_PARTNER_TAG_US:   ${{ secrets.AMAZON_CREATORS_PARTNER_TAG_US }}
+          AMAZON_MARKETPLACE_US:            ${{ secrets.AMAZON_MARKETPLACE_US }}
+          RAPIDAPI_KEY:                     ${{ secrets.RAPIDAPI_KEY }}
+          AMAZON_FALLBACK_ENABLED:          "true"
+          SOCIAL_POST_HOURS:                "9,13,17,20"
+          # Empty on a scheduled run, so the ET slot check applies as normal.
+          FORCE_FLAG:                       ${{ inputs.force && '--force' || '' }}
+          DRY_RUN_FLAG:                     ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python post_social.py $FORCE_FLAG $DRY_RUN_FLAG

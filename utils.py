@@ -144,6 +144,36 @@ def is_recently_processed(asin, region):
     res = supabase.table("product_links").select("id").eq("asin", asin).eq("region", region).execute()
     return len(res.data) > 0
 
+# ── Hashtags (shared by Telegram / Facebook / Instagram captions) ────────────
+
+SEO_TAGS = [
+    "#amazonfinds", "#amazondeals", "#bestamazonproducts", "#amazoninfluencer",
+    "#tiktokmademebuyit", "#shoppinghaul", "#discountdeals", "#smartshopping",
+    "#lifestylehacks", "#techdeals", "#homedecorideas", "#giftideas2026",
+    "#amazonmusthaves", "#viralfinds", "#dealsonline", "#budgetfriendly",
+    "#smartshopper", "#neverpayfullprice", "#hotdeals", "#dailydeals",
+    "#shoppingaddict", "#instadeals", "#savebig",
+    "#tiktokmademebuythis", "#amazonmademebuythis", "#viralus", "#usdeals",
+    "#viralusa", "#usa"
+]
+
+KITCHEN_TAGS = [
+    "#kitchengadgets", "#kitchenmusthaves", "#kitchenware", "#cookingtools",
+    "#kitchenhacks", "#homecook", "#kitchenfinds", "#foodprep",
+]
+
+
+def pick_tags(n, extra=None):
+    """Return `n` shuffled hashtags, optionally seeded from an extra pool."""
+    seen, unique = set(), []
+    for t in list(extra or []) + list(SEO_TAGS):
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+    random.shuffle(unique)
+    return " ".join(unique[:n])
+
+
 def get_deal_caption(deal, platform="telegram"):
     # 1. Extensive Hook Categories (50+ Hooks)
     title_lower = deal.get('title', '').lower()
@@ -244,18 +274,7 @@ def get_deal_caption(deal, platform="telegram"):
     # 3. ASIN — used by post_to_fb.py to build the link comment (not in caption)
 
     # 4. Randomized SEO Tags (Exactly 5)
-    seo_tags_list = [
-        "#amazonfinds", "#amazondeals", "#bestamazonproducts", "#amazoninfluencer",
-        "#tiktokmademebuyit", "#shoppinghaul", "#discountdeals", "#smartshopping",
-        "#lifestylehacks", "#techdeals", "#homedecorideas", "#giftideas2026",
-        "#amazonmusthaves", "#viralfinds", "#dealsonline", "#budgetfriendly",
-        "#smartshopper", "#neverpayfullprice", "#hotdeals", "#dailydeals",
-        "#shoppingaddict", "#instadeals", "#savebig",
-        "#tiktokmademebuythis", "#amazonmademebuythis", "#viralus", "#usdeals",
-        "#viralusa", "#usa"
-    ]
-    random.shuffle(seo_tags_list)
-    seo_tags = " ".join(seo_tags_list[:5])
+    seo_tags = pick_tags(5)
 
     # 5. Dynamic Content Shuffling
     # NOTE: Price, discount %, and review counts are intentionally excluded.
@@ -283,3 +302,153 @@ def get_deal_caption(deal, platform="telegram"):
                f"{seo_tags}")
 
     return caption
+
+
+# ── Social history (social_posted table — Facebook / Instagram) ──────────────
+
+DISCLOSURE = "As an Amazon Associate we earn from qualifying purchases."
+
+
+def social_is_posted(asin, platform):
+    """True if this ASIN has already gone out on `platform` ('fb' or 'ig')."""
+    if not supabase:
+        return False
+    try:
+        res = (
+            supabase.table("social_posted")
+            .select("id")
+            .eq("asin", asin)
+            .eq("platform", platform)
+            .execute()
+        )
+        return len(res.data) > 0
+    except Exception as e:
+        print(f"⚠️ Could not check social history for {asin}: {e}")
+        return False
+
+
+def social_mark_posted(asin, platform, hook=None, post_id=None, title=None, score=None):
+    """Record a successful post so the picker never repeats it."""
+    if not supabase:
+        return
+    try:
+        supabase.table("social_posted").upsert(
+            {
+                "asin": asin,
+                "platform": platform,
+                "post_id": post_id,
+                "hook": hook,
+                "title": title,
+                "score": score,
+            },
+            on_conflict="asin,platform",
+        ).execute()
+    except Exception as e:
+        print(f"⚠️ Could not record social post for {asin}: {e}")
+
+
+def social_recent_hooks(limit=25):
+    """Return the hooks used by the most recent social posts, newest first.
+
+    Not filtered by platform — we want variety across the whole feed, so a
+    hook used on Facebook this morning won't resurface on Instagram tonight.
+    """
+    if not supabase:
+        return []
+    try:
+        res = (
+            supabase.table("social_posted")
+            .select("hook")
+            .order("posted_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return [r["hook"] for r in (res.data or []) if r.get("hook")]
+    except Exception as e:
+        print(f"⚠️ Could not read recent hooks: {e}")
+        return []
+
+
+def cleanup_old_social_posts(days=45):
+    """Drop social history older than `days` so good deals can come round again."""
+    if not supabase:
+        return
+    try:
+        from datetime import datetime, timedelta
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        supabase.table("social_posted").delete().lt("posted_at", cutoff).execute()
+        print(f"🧹 Cleaned up social history older than {days} days.")
+    except Exception as e:
+        print(f"⚠️ Error cleaning up social history: {e}")
+
+
+# ── Facebook / Instagram captions ────────────────────────────────────────────
+
+def telegram_channel_url(handle=None):
+    """Turn '@snagpopofficial' into a clickable https://t.me/... link."""
+    handle = handle or os.getenv("TELEGRAM_CHANNEL_US", "@snagpopofficial")
+    if not handle:
+        return None
+    if handle.startswith("http"):
+        return handle
+    return f"https://t.me/{handle.lstrip('@')}"
+
+
+def product_link(asin, source):
+    """The snagpop.com redirect that resolves to the tagged affiliate URL."""
+    return f"https://www.snagpop.com/l/{asin}?s={source}"
+
+
+def get_social_caption(deal, platform, hook):
+    """Build the caption for a Facebook or Instagram post.
+
+    Facebook keeps the product link (and the Telegram invite) in the post body.
+    Instagram carries NO link at all — the link goes in the first comment, so
+    the caption points there instead.
+
+    Price, discount % and review counts are deliberately left out on both, for
+    the same Amazon Associates reasons as the Telegram caption above.
+    """
+    body = f"📦 {deal['title']}\n\n"
+    if deal.get("promo_code"):
+        body += f"🎫 PROMO CODE: {deal['promo_code']} (apply at checkout)\n\n"
+
+    if platform == "fb":
+        tg_url = telegram_channel_url()
+        tg_line = (
+            f"💬 Want these daily? Join our free Telegram: {tg_url}\n\n"
+            if tg_url else ""
+        )
+        return (
+            f"{hook}\n\n"
+            f"{body}"
+            f"🛒 Grab it here: {product_link(deal['asin'], 'fb')}\n\n"
+            f"{tg_line}"
+            f"{DISCLOSURE}\n\n"
+            f"{pick_tags(5)}"
+        )
+
+    # Instagram — no URL anywhere in the caption.
+    extra = KITCHEN_TAGS if _looks_like_kitchen(deal) else None
+    return (
+        f"{hook}\n\n"
+        f"{body}"
+        f"🔗 Link in the comments 👇\n\n"
+        f"🔔 Follow for daily Amazon finds!\n\n"
+        f"{DISCLOSURE}\n\n"
+        f"{pick_tags(20, extra=extra)}"
+    )
+
+
+def get_social_comment(deal, platform):
+    """The link comment posted under an Instagram post."""
+    return f"🛒 Grab it here: {product_link(deal['asin'], platform)}"
+
+
+def _looks_like_kitchen(deal):
+    """Local import keeps utils free of a hard dependency on social_hooks."""
+    try:
+        from social_hooks import is_kitchen
+        return is_kitchen(deal)
+    except Exception:
+        return False
