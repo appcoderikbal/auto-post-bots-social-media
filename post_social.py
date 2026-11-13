@@ -125,13 +125,19 @@ KITCHEN_SEARCHES = [
     {"query": "food storage containers",      "index": "HomeAndKitchen"},
 ]
 
+# Deliberately kitchen-free: the general accounts filter kitchen products out,
+# so searching for them just shrinks the usable pool. A run that searched
+# "kitchen gadgets tools" for a general account yielded only 8 usable deals
+# out of 20.
 GENERAL_SEARCHES = [
-    {"query": "home decor accessories",       "index": "HomeAndKitchen"},
-    {"query": "kitchen gadgets tools",        "index": "HomeAndKitchen"},
-    {"query": "tech gadgets electronics",     "index": "Electronics"},
-    {"query": "smart home devices",           "index": "Electronics"},
-    {"query": "kitchen appliances",           "index": "HomeAndKitchen"},
-    {"query": "home decor living room",       "index": "HomeAndKitchen"},
+    {"query": "home decor accessories",        "index": "HomeAndKitchen"},
+    {"query": "home decor living room",        "index": "HomeAndKitchen"},
+    {"query": "bedroom decor lighting",        "index": "HomeAndKitchen"},
+    {"query": "tech gadgets electronics",      "index": "Electronics"},
+    {"query": "smart home devices",            "index": "Electronics"},
+    {"query": "wireless headphones earbuds",   "index": "Electronics"},
+    {"query": "phone accessories charger",     "index": "Electronics"},
+    {"query": "desk office accessories",       "index": "OfficeProducts"},
 ]
 
 
