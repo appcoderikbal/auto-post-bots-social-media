@@ -1,16 +1,14 @@
 name: Facebook + Instagram Deal Bot
 
 on:
-  schedule:
-    # Posts 4x a day on US Eastern: 9 AM, 1 PM, 5 PM, 8 PM ET.
-    # GitHub cron is UTC and ignores DST, so we fire on every UTC hour that
-    # could map to a slot under EST (UTC-5) or EDT (UTC-4); post_social.py
-    # checks the real ET hour and skips the runs that aren't a slot.
-    #   9 AM ET -> 13:00 / 14:00 UTC
-    #   1 PM ET -> 17:00 / 18:00 UTC
-    #   5 PM ET -> 21:00 / 22:00 UTC
-    #   8 PM ET -> 00:00 / 01:00 UTC
-    - cron: "0 0,1,13,14,17,18,21,22 * * *"
+  # DISABLED — cron-job.org drives this now, via the repository_dispatch
+  # trigger below (schedule 0 9,13,17,20 with timezone America/New_York).
+  # Re-enabling this without removing the cron-job.org job posts everything
+  # twice. GitHub cron is UTC-only and ignores DST, which is why it needed
+  # eight UTC hours to cover four ET slots; cron-job.org handles the timezone.
+  #
+  # schedule:
+  #   - cron: "0 0,1,13,14,17,18,21,22 * * *"
 
   workflow_dispatch:
     inputs:

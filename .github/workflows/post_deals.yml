@@ -1,12 +1,14 @@
 name: Telegram Deal Bot
 
 on:
-  schedule:
-    # Runs every hour at :00 UTC
-    # USA  window  8AM–1AM EST  = 13:00–06:00 UTC  (UTC-5 standard)
-    # IN   window  8AM–1AM IST  = 02:30–19:30 UTC  (UTC+5:30)
-    # Running every hour covers both windows — script skips if outside window
-    - cron: "0 * * * *"
+  # DISABLED — cron-job.org drives this now, via the repository_dispatch
+  # trigger below (hourly). Keep that job HOURLY: run_bot.py applies its own
+  # per-region window (8 AM–1 AM local for both US and India) and runs the
+  # midnight queue flush, so a sparser schedule breaks both.
+  # Re-enabling this alongside the cron-job.org job posts everything twice.
+  #
+  # schedule:
+  #   - cron: "0 * * * *"
 
   # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
