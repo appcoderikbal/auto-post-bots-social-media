@@ -25,13 +25,14 @@ on:
       platform:
         description: "Which network to post to"
         type: choice
-        default: both
-        options: [both, fb, ig]
+        default: all
+        options: [all, fb, ig, ig_kitchen]
 
   # External trigger for cron-job.org. POST to
   #   https://api.github.com/repos/<owner>/<repo>/dispatches
-  # with {"event_type":"trigger-social-post","client_payload":{"platform":"ig"}}
-  # Omit client_payload.platform to post to both networks.
+  # with {"event_type":"trigger-social-post","client_payload":{"platform":"ig_kitchen"}}
+  # platform accepts: all | fb | ig | ig_kitchen, or a comma-separated
+  # subset such as "ig,ig_kitchen". Omit it to post to every account.
   repository_dispatch:
     types: [trigger-social-post]
 
@@ -65,6 +66,8 @@ jobs:
           FB_PAGE_ID:                       ${{ secrets.FB_PAGE_ID }}
           FB_PAGE_ACCESS_TOKEN:             ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
           INSTAGRAM_ACCOUNT_ID:             ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          INSTAGRAM_ACCOUNT_ID_KITCHEN:     ${{ secrets.INSTAGRAM_ACCOUNT_ID_KITCHEN }}
+          FB_PAGE_ACCESS_TOKEN_KITCHEN:     ${{ secrets.FB_PAGE_ACCESS_TOKEN_KITCHEN }}
           FB_LOCATION_ID:                   ${{ secrets.FB_LOCATION_ID }}
           TELEGRAM_CHANNEL_US:              ${{ secrets.TELEGRAM_CHANNEL_US }}
           SUPABASE_URL:                     ${{ secrets.SUPABASE_URL }}

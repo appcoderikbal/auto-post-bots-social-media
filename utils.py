@@ -399,16 +399,20 @@ def product_link(asin, source):
     return f"https://www.snagpop.com/l/{asin}?s={source}"
 
 
-def get_social_caption(deal, platform, hook):
+def get_social_caption(deal, platform, hook, source=None):
     """Build the caption for a Facebook or Instagram post.
 
     Facebook keeps the product link (and the Telegram invite) in the post body.
     Instagram carries NO link at all — the link goes in the first comment, so
     the caption points there instead.
 
+    `source` is the ?s= tag on the tracking link, so posts from different
+    accounts stay attributable; it defaults to the platform kind.
+
     Price, discount % and review counts are deliberately left out on both, for
     the same Amazon Associates reasons as the Telegram caption above.
     """
+    source = source or platform
     body = f"📦 {deal['title']}\n\n"
     if deal.get("promo_code"):
         body += f"🎫 PROMO CODE: {deal['promo_code']} (apply at checkout)\n\n"
@@ -422,7 +426,7 @@ def get_social_caption(deal, platform, hook):
         return (
             f"{hook}\n\n"
             f"{body}"
-            f"🛒 Grab it here: {product_link(deal['asin'], 'fb')}\n\n"
+            f"🛒 Grab it here: {product_link(deal['asin'], source)}\n\n"
             f"{tg_line}"
             f"{DISCLOSURE}\n\n"
             f"{pick_tags(5)}"
@@ -440,9 +444,9 @@ def get_social_caption(deal, platform, hook):
     )
 
 
-def get_social_comment(deal, platform):
+def get_social_comment(deal, source):
     """The link comment posted under an Instagram post."""
-    return f"🛒 Grab it here: {product_link(deal['asin'], platform)}"
+    return f"🛒 Grab it here: {product_link(deal['asin'], source)}"
 
 
 def _looks_like_kitchen(deal):
