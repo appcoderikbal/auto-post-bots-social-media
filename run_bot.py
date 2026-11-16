@@ -87,15 +87,32 @@ def fetch_fresh_deal(region: str) -> dict | None:
     if not deals:
         print("  ⚠️ Amazon returned no deals.")
         return None
-        
+
+    # The search already cost an API call and returned up to 10 products.
+    # Post the first eligible one and BANK THE REST in telegram_queue — later
+    # posts drain the queue instead of paying for another search. Discarding
+    # the spares meant one API call per post, which is what exhausted the
+    # RapidAPI monthly quota.
+    platform = f"telegram_{region}"
+    chosen, banked = None, 0
+
     for deal in deals:
-        if not tg_is_queued(deal.get("asin"), f"telegram_{region}") and not is_recently_processed(deal.get("asin"), region):
-            # Save the affiliate link for the website
-            save_product_link(deal.get("asin"), region, deal.get("affiliate_url"), deal.get("title"))
-            return deal
-            
-    print("  ⚠️ All fetched live deals were recently processed or queued.")
-    return None
+        asin = deal.get("asin")
+        if not asin or tg_is_queued(asin, platform) or is_recently_processed(asin, region):
+            continue
+        if chosen is None:
+            save_product_link(asin, region, deal.get("affiliate_url"), deal.get("title"))
+            chosen = deal
+        else:
+            tg_add_to_queue(asin, platform, category=cat["query"], product_data=deal)
+            banked += 1
+
+    if banked:
+        print(f"  💾 Banked {banked} spare deal(s) — the next posts reuse these "
+              f"instead of searching again.")
+    if chosen is None:
+        print("  ⚠️ All fetched live deals were recently processed or queued.")
+    return chosen
 
 
 def send_to_telegram(channel: str, deal: dict, platform: str) -> bool:
@@ -188,6 +205,11 @@ def run():
                 print(f"  📦 Using queued deal: {deal.get('title', deal.get('asin'))}")
                 success = send_to_telegram(cfg["channel"], deal, platform)
                 if success:
+                    # The caption links to snagpop.com/l/<asin>, which resolves
+                    # via product_links — so the row has to exist before the
+                    # post goes out, for queued deals as much as live ones.
+                    save_product_link(deal.get("asin"), cfg["region"],
+                                      deal.get("affiliate_url"), deal.get("title"))
                     tg_delete_deal(row_id)
                     print(f"  🗑️ Removed from queue (row {row_id})")
                     posted_count += 1
