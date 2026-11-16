@@ -60,6 +60,29 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 REALTIME_AMAZON_HOST = os.getenv("REALTIME_AMAZON_HOST", "real-time-amazon-data.p.rapidapi.com")
 FALLBACK_ENABLED = os.getenv("AMAZON_FALLBACK_ENABLED", "true").lower() == "true"
 
+# --- Second RapidAPI provider, used when the first is down or out of quota ---
+# One RapidAPI key works across every API on the platform, and each API has
+# its OWN quota — so subscribing to a second Amazon API gives a fresh
+# allowance under the same RAPIDAPI_KEY. Only the host changes.
+#
+# Response shapes differ between providers, so nothing here is hardcoded to
+# one vendor's field names: the product list is located by shape and the
+# fields are read through a tolerant mapper. Point it at any Amazon API on
+# RapidAPI and it should work without code changes.
+#
+#   RAPIDAPI_BACKUP_HOST          e.g. "amazon-product10.p.rapidapi.com"
+#   RAPIDAPI_BACKUP_SEARCH_PATH   default "/search"
+#   RAPIDAPI_BACKUP_SEARCH_PARAM  default "query"
+#   RAPIDAPI_BACKUP_DETAIL_PATH   default "/product-details"
+#   RAPIDAPI_BACKUP_DETAIL_PARAM  default "asin"
+#   RAPIDAPI_BACKUP_KEY           defaults to RAPIDAPI_KEY
+BACKUP_HOST         = os.getenv("RAPIDAPI_BACKUP_HOST")
+BACKUP_KEY          = os.getenv("RAPIDAPI_BACKUP_KEY") or RAPIDAPI_KEY
+BACKUP_SEARCH_PATH  = os.getenv("RAPIDAPI_BACKUP_SEARCH_PATH", "/search")
+BACKUP_SEARCH_PARAM = os.getenv("RAPIDAPI_BACKUP_SEARCH_PARAM", "query")
+BACKUP_DETAIL_PATH  = os.getenv("RAPIDAPI_BACKUP_DETAIL_PATH", "/product-details")
+BACKUP_DETAIL_PARAM = os.getenv("RAPIDAPI_BACKUP_DETAIL_PARAM", "asin")
+
 RESOURCES = [
     "itemInfo.title",
     "images.primary.large",
@@ -216,9 +239,15 @@ def get_items(asins, region="us"):
     items = _dig(data, "itemResults", "items") or []
     if items:
         return [_map_item(i, region) for i in items]
-    # Creators API returned nothing (e.g. account not eligible) -> fall back.
+    # Creators API returned nothing (e.g. account not eligible) -> fall back
+    # through the RapidAPI providers in turn, per ASIN.
     if FALLBACK_ENABLED:
-        return [d for d in (_rapidapi_get_item(a, region) for a in asins) if d]
+        out = []
+        for a in asins:
+            d = _rapidapi_get_item(a, region) or _backup_get_item(a, region)
+            if d:
+                out.append(d)
+        return out
     return []
 
 
@@ -251,9 +280,14 @@ def search_deals(keywords, search_index="All", min_saving_percent=None, item_cou
     )
     if items:
         return [_map_item(i) for i in items]
-    # Creators API returned nothing (e.g. account not eligible) -> fall back.
+    # Creators API returned nothing (e.g. account not eligible) -> fall back
+    # through the RapidAPI providers in turn.
     if FALLBACK_ENABLED:
-        return _rapidapi_search(keywords, item_count=item_count, region=region)
+        found = _rapidapi_search(keywords, item_count=item_count, region=region)
+        if found:
+            return found
+        # Primary exhausted its quota or returned nothing -> try the backup.
+        return _backup_search(keywords, item_count=item_count, region=region)
     return []
 
 
@@ -359,3 +393,156 @@ def _rapidapi_search(keywords, item_count=10, region="us"):
         print(f"⚠️ Real-Time Amazon Data returned no products. "
               f"Keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}")
     return [_map_rtad(p, region) for p in products[:item_count] if p.get("asin")]
+
+
+# --- Backup RapidAPI provider ------------------------------------------------
+# Deliberately vendor-neutral: locate the product list by SHAPE rather than by
+# a known key path, and read fields through candidate name lists. Amazon APIs
+# on RapidAPI all return roughly the same information under different names.
+
+_ASIN_KEYS   = ("asin", "product_asin", "productasin", "id")
+_TITLE_KEYS  = ("product_title", "title", "name", "producttitle", "productname")
+_PRICE_KEYS  = ("product_price", "price", "currentprice", "retailprice",
+                "current_price", "sale_price", "pricetopay")
+_WAS_KEYS    = ("product_original_price", "original_price", "listprice",
+                "list_price", "was_price", "msrp", "basisprice")
+_IMG_KEYS    = ("product_photos", "images", "imageurllist", "product_images",
+                "photos", "image_list")
+_IMG1_KEYS   = ("product_photo", "image", "imageurl", "main_image", "thumbnail",
+                "image_url", "primary_image")
+_URL_KEYS    = ("product_url", "url", "detailpageurl", "producturl", "link")
+_RATE_KEYS   = ("product_star_rating", "rating", "productrating", "stars",
+                "star_rating", "average_rating")
+_COUNT_KEYS  = ("product_num_ratings", "reviews_count", "countreview",
+                "ratings_total", "num_ratings", "review_count")
+
+
+def _pick(d, keys):
+    """First present, non-empty value among `keys`.
+
+    Matches case-insensitively AND ignoring underscores, so a candidate like
+    "reviews_count" also matches a provider's "reviewsCount" or "ReviewsCount".
+    """
+    if not isinstance(d, dict):
+        return None
+    flat = {}
+    for k, v in d.items():
+        for variant in (k.lower(), k.lower().replace("_", "")):
+            flat.setdefault(variant, v)
+    for k in keys:
+        for variant in (k, k.replace("_", "")):
+            v = flat.get(variant)
+            if v not in (None, "", [], {}):
+                return v
+    return None
+
+
+def _looks_like_product(d):
+    """True if this dict carries both an ASIN-ish id and a title-ish name."""
+    if not isinstance(d, dict):
+        return False
+    lowered = {k.lower() for k in d}
+    has_id    = any(k in lowered for k in ("asin", "product_asin", "productasin"))
+    has_title = any("title" in k or k in ("name", "productname") for k in lowered)
+    return has_id and has_title
+
+
+def _find_products(obj, depth=0):
+    """Walk a JSON response and return the first list of product-like dicts.
+
+    Saves having to know each provider's envelope — one returns
+    data.products, another results, another just a bare array.
+    """
+    if depth > 6 or obj is None:
+        return []
+    if isinstance(obj, list):
+        if obj and _looks_like_product(obj[0]):
+            return [x for x in obj if _looks_like_product(x)]
+        for item in obj[:5]:
+            found = _find_products(item, depth + 1)
+            if found:
+                return found
+    elif isinstance(obj, dict):
+        if _looks_like_product(obj):
+            return [obj]
+        for value in obj.values():
+            found = _find_products(value, depth + 1)
+            if found:
+                return found
+    return []
+
+
+def _map_generic(p, region="us"):
+    """Map any provider's product dict onto the project's standard shape."""
+    price_disp = _pick(p, _PRICE_KEYS)
+    old_disp   = _pick(p, _WAS_KEYS)
+    if isinstance(price_disp, dict):
+        price_disp = _pick(price_disp, ("display", "raw", "value", "amount"))
+    if isinstance(old_disp, dict):
+        old_disp = _pick(old_disp, ("display", "raw", "value", "amount"))
+
+    cur, old = _parse_price(price_disp), _parse_price(old_disp)
+    pct = round((old - cur) / old * 100) if (old and cur and old > cur) else None
+
+    photos = _photo_urls(_pick(p, _IMG_KEYS)) or _photo_urls([_pick(p, _IMG1_KEYS)])
+
+    return {
+        "asin":          _pick(p, _ASIN_KEYS),
+        "title":         _pick(p, _TITLE_KEYS) or "Amazing Amazon Find!",
+        "price":         price_disp or "Check price",
+        "old_price":     old_disp,
+        "discount":      f"{pct}%" if pct else None,
+        "discount_text": f" ({pct}% OFF!)" if pct else "",
+        "affiliate_url": _tagged_url(_pick(p, _URL_KEYS), region),
+        "image_url":     photos[0] if photos else None,
+        "image_list":    photos[:10],
+        "rating":        _pick(p, _RATE_KEYS),
+        "reviews_count": _pick(p, _COUNT_KEYS),
+    }
+
+
+def _backup_get(path, params):
+    """GET the backup provider; return parsed JSON or None."""
+    if not (BACKUP_HOST and BACKUP_KEY):
+        return None
+    try:
+        resp = requests.get(
+            f"https://{BACKUP_HOST}{path}",
+            params=params,
+            headers={"X-RapidAPI-Key": BACKUP_KEY, "X-RapidAPI-Host": BACKUP_HOST},
+            timeout=20,
+        )
+        if resp.status_code == 429:
+            print(f"❌ Backup provider ({BACKUP_HOST}) is ALSO out of quota.")
+            return None
+        if resp.status_code != 200:
+            print(f"❌ Backup provider HTTP {resp.status_code}: {resp.text[:200]}")
+            return None
+        return resp.json()
+    except Exception as e:
+        print(f"❌ Backup provider request failed: {e}")
+        return None
+
+
+def _backup_search(keywords, item_count=10, region="us"):
+    if not BACKUP_HOST:
+        return []
+    print(f"🔁 Trying backup provider ({BACKUP_HOST}) for '{keywords}'...")
+    params = {BACKUP_SEARCH_PARAM: keywords, "country": get_config(region)["country"]}
+    products = _find_products(_backup_get(BACKUP_SEARCH_PATH, params))
+    if not products:
+        print("⚠️ Backup provider returned no recognisable products.")
+        return []
+    mapped = [_map_generic(p, region) for p in products[:item_count]]
+    mapped = [m for m in mapped if m.get("asin") and m.get("image_url")]
+    print(f"✅ Backup provider returned {len(mapped)} usable deal(s).")
+    return mapped
+
+
+def _backup_get_item(asin, region="us"):
+    if not BACKUP_HOST:
+        return None
+    print(f"🔁 Trying backup provider for ASIN {asin}...")
+    params = {BACKUP_DETAIL_PARAM: asin, "country": get_config(region)["country"]}
+    products = _find_products(_backup_get(BACKUP_DETAIL_PATH, params))
+    return _map_generic(products[0], region) if products else None

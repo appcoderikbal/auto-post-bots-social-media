@@ -60,5 +60,10 @@ jobs:
           AMAZON_CREATORS_PARTNER_TAG_IN:  ${{ secrets.AMAZON_CREATORS_PARTNER_TAG_IN }}
           AMAZON_MARKETPLACE_IN:           ${{ secrets.AMAZON_MARKETPLACE_IN }}
           RAPIDAPI_KEY:                    ${{ secrets.RAPIDAPI_KEY }}
+          RAPIDAPI_BACKUP_HOST:            ${{ secrets.RAPIDAPI_BACKUP_HOST }}
+          RAPIDAPI_BACKUP_SEARCH_PATH:     ${{ secrets.RAPIDAPI_BACKUP_SEARCH_PATH }}
+          RAPIDAPI_BACKUP_SEARCH_PARAM:    ${{ secrets.RAPIDAPI_BACKUP_SEARCH_PARAM }}
+          RAPIDAPI_BACKUP_DETAIL_PATH:     ${{ secrets.RAPIDAPI_BACKUP_DETAIL_PATH }}
+          RAPIDAPI_BACKUP_DETAIL_PARAM:    ${{ secrets.RAPIDAPI_BACKUP_DETAIL_PARAM }}
           AMAZON_FALLBACK_ENABLED:         "true"
         run: python run_bot.py
